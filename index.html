@@ -99,7 +99,8 @@ select option{background:var(--card)}
 .btn-secondary:hover{background:#00ff7f15}
 .btn-danger{background:#330000;color:var(--red);border:1px solid var(--red);font-family:'Bebas Neue',sans-serif;font-size:0.92rem;padding:0.42rem 0.85rem;border-radius:8px;cursor:pointer}
 .btn-sm{font-size:0.75rem;padding:0.26rem 0.6rem}
-.sc-table{width:100%;border-collapse:collapse;font-size:0.8rem}
+.sc-table{width:100%;border-collapse:collapse;font-size:0.8rem;min-width:420px}
+.sc-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
 .sc-table th{background:var(--card2);color:var(--muted);font-weight:600;padding:0.42rem 0.4rem;text-align:left;font-size:0.7rem;letter-spacing:0.5px;border-bottom:1px solid var(--border)}
 .sc-table td{padding:0.4rem 0.4rem;border-bottom:1px solid #0a1a1020;vertical-align:middle}
 .sc-table tr:hover td{background:#00ff7f04}
@@ -825,7 +826,9 @@ function processDelivery(extType,runs,dismissType,fielder){
 
   match.ballLog.push({chip,snap:preSnap});
   inn.currentOver.push(chip);
-  match.commentary.unshift({ov:ovStr(inn.balls),chip,text:comm});
+  // Record commentary with ball number BEFORE this delivery (already incremented above for legal balls)
+  const commOv = legal ? ovStr(inn.balls) : ovStr(inn.balls);
+  match.commentary.unshift({ov:commOv,chip,text:comm});
   document.getElementById('freehit-banner').classList.toggle('show',isFreeHit);
 
   if(legal&&inn.balls%6===0&&inn.balls>0){
@@ -1004,10 +1007,10 @@ function renderScorecard(){
   [m.inning1,m.inning2].filter(Boolean).forEach((inn,idx)=>{
     const team=idx===0?m.team1:m.team2;
     html+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><div class="card-title" style="margin-bottom:0">${team}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--green)">${inn.runs}/${inn.wickets} <span style="font-size:0.85rem;color:var(--muted)">(${ovStr(inn.balls)})</span></div></div>
-    <table class="sc-table"><thead><tr><th>BATTER</th><th>DISMISSAL</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>${Object.entries(inn.batters||{}).map(([n,s])=>{const sr=s.balls>0?((s.runs/s.balls)*100).toFixed(0):0;const rc=s.runs>=100?'sc-100':s.runs>=50?'sc-50':'';return`<tr><td><div style="font-weight:700">${n}${!s.out&&!m.result?'*':''}</div><div class="sc-dismiss">${s.out?s.dismissal:'not out'}</div></td><td style="display:none"></td><td><div class="sc-runs ${rc}">${s.runs}</div></td><td>${s.balls}</td><td style="color:var(--blue)">${s.fours||0}</td><td style="color:var(--gold)">${s.sixes||0}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${sr}</td></tr>`;}).join('')}</tbody></table>
+    <div class="sc-table-wrap"><table class="sc-table"><thead><tr><th>BATTER</th><th>DISMISSAL</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>${Object.entries(inn.batters||{}).map(([n,s])=>{const sr=s.balls>0?((s.runs/s.balls)*100).toFixed(0):0;const rc=s.runs>=100?'sc-100':s.runs>=50?'sc-50':'';return`<tr><td style="min-width:80px"><div style="font-weight:700">${n}${!s.out&&!m.result?'*':''}</div></td><td style="min-width:100px"><div class="sc-dismiss">${s.out?s.dismissal:'not out'}</div></td><td><div class="sc-runs ${rc}">${s.runs}</div></td><td>${s.balls}</td><td style="color:var(--blue)">${s.fours||0}</td><td style="color:var(--gold)">${s.sixes||0}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${sr}</td></tr>`;}).join('')}</tbody></table></div>
     <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Extras: ${inn.extras||0}</div>
     <div class="card-title" style="margin-top:0.9rem">BOWLING</div>
-    <table class="sc-table"><thead><tr><th>BOWLER</th><th>O</th><th>R</th><th>W</th><th>ECON</th><th>M</th></tr></thead><tbody>${Object.entries(inn.bowlers||{}).map(([n,s])=>`<tr><td style="font-weight:700">${n}</td><td>${s.overs}.${s.balls%6}</td><td>${s.runs}</td><td style="color:var(--red);font-weight:700">${s.wickets}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${s.balls>0?((s.runs/s.balls)*6).toFixed(2):0}</td><td>${s.maidens||0}</td></tr>`).join('')}</tbody></table>
+    <div class="sc-table-wrap"><table class="sc-table"><thead><tr><th>BOWLER</th><th>O</th><th>R</th><th>W</th><th>ECON</th><th>M</th></tr></thead><tbody>${Object.entries(inn.bowlers||{}).map(([n,s])=>`<tr><td style="font-weight:700;min-width:90px">${n}</td><td>${s.overs}.${s.balls%6}</td><td>${s.runs}</td><td style="color:var(--red);font-weight:700">${s.wickets}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${s.balls>0?((s.runs/s.balls)*6).toFixed(2):0}</td><td>${s.maidens||0}</td></tr>`).join('')}</tbody></table></div>
     ${inn.fow&&inn.fow.length?`<div class="card-title" style="margin-top:0.9rem">FALL OF WICKETS</div><div>${inn.fow.map(f=>`<div class="fow-item"><span>${f.n}/${f.score}</span> — ${f.batter} (${f.ov})</div>`).join('')}</div>`:''}
     ${inn.partnerships&&inn.partnerships.length?`<div class="card-title" style="margin-top:0.9rem">PARTNERSHIPS</div><div>${inn.partnerships.map(p=>`<div style="margin-bottom:0.5rem"><div style="display:flex;justify-content:space-between;font-size:0.78rem"><span>${p.b1} & ${p.b2}</span><span style="color:var(--green);font-family:'JetBrains Mono',monospace">${p.runs} (${p.balls})</span></div><div class="part-bar"><div class="part-fill" style="width:${Math.min(100,p.runs)}%"></div></div></div>`).join('')}</div>`:''}
     </div>`;
