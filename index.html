@@ -370,6 +370,7 @@ tr:hover td{background:#00ff7f04}
     <div style="display:flex;gap:0.4rem;align-items:center">
       <select id="sc-sel" onchange="renderScorecard()" style="width:auto;font-size:0.8rem;padding:0.35rem"><option value="live">Live Match</option></select>
       <button class="share-btn" onclick="shareScorecard()">🔗 Share</button>
+      <button class="share-btn" onclick="shareScorecardPDF()" style="background:#1a0a30;color:var(--purple);border-color:var(--purple)">📄 PDF</button>
     </div>
   </div>
   <div id="sc-content"><div class="empty-state"><div class="empty-icon">📋</div><div>No match data</div></div></div>
@@ -526,6 +527,7 @@ tr:hover td{background:#00ff7f04}
     <button class="btn-primary" onclick="goNewMatch()">🏏 NEW MATCH</button>
     <button class="btn-secondary" onclick="closeModal('modal-match-over');navTo('scorecard')">📋 VIEW SCORECARD</button>
     <button class="share-btn" style="width:100%;text-align:center" onclick="shareScorecard()">🔗 SHARE SCORE</button>
+    <button class="share-btn" style="width:100%;text-align:center;background:#1a0a30;color:var(--purple);border-color:var(--purple);margin-top:0.4rem" onclick="shareScorecardPDF()">📄 DOWNLOAD PDF</button>
   </div>
 </div></div>
 
@@ -793,10 +795,10 @@ function processDelivery(extType,runs,dismissType,fielder){
     isFreeHit=true;
     if(runs>0&&runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(extType==='Lb'){
-    // FIX 5: Leg Bye — runs go to team but NOT on bowler figures
+    // Leg Bye — runs go to team but NOT on bowler figures, ball counts on batter
     inn.runs+=runs;inn.extras+=runs;
-    // Do NOT add to bwl.runs (fix!)
-    bwl.balls++; // legal delivery, ball counts on bowler overs
+    bwl.balls++; // legal delivery counts on bowler overs only
+    str.balls++; // ball counts on batter figure
     inn.balls++;
     legal=true;chip=`Lb${runs}`;comm=`Leg bye. ${runs} run${runs!==1?'s':''}.`;
     isFreeHit=false;
@@ -1091,7 +1093,96 @@ function renderAdminMatchList(){
 function deleteMatch(idx){if(!confirm('Delete?'))return;matches.splice(idx,1);save('kgh-matches',matches);renderAdminMatchList();}
 function openEditBall(mIdx,iIdx,oIdx,bIdx,val){editContext={mIdx,iIdx,oIdx,bIdx,newVal:null};document.getElementById('edit-ball-info').textContent=`${matches[mIdx].team1} vs ${matches[mIdx].team2} | Ball: "${val}"`;document.getElementById('edit-val-preview').textContent='';document.querySelectorAll('#modal-admin-edit .dismiss-btn').forEach(b=>b.classList.remove('sel'));openModal('modal-admin-edit');}
 function setEditVal(val){editContext.newVal=val;document.getElementById('edit-val-preview').textContent=`→ Change to: ${val}`;document.querySelectorAll('#modal-admin-edit .dismiss-btn').forEach(b=>b.classList.remove('sel'));event.target.classList.add('sel');}
-function confirmEditBall(){if(!editContext.newVal)return alert('Select value');const m=matches[editContext.mIdx];const inn=editContext.iIdx===0?m.inning1:m.inning2;if(!inn)return closeModal('modal-admin-edit');if(editContext.oIdx===-1){if(editContext.newVal==='DELETE')inn.currentOver.splice(editContext.bIdx,1);else inn.currentOver[editContext.bIdx]=editContext.newVal;}else{if(editContext.newVal==='DELETE')inn.overs[editContext.oIdx].splice(editContext.bIdx,1);else inn.overs[editContext.oIdx][editContext.bIdx]=editContext.newVal;}save('kgh-matches',matches);closeModal('modal-admin-edit');renderAdminMatchList();}
+function confirmEditBall(){
+  if(!editContext.newVal) return alert('Select value');
+  const m=matches[editContext.mIdx];
+  const inn=editContext.iIdx===0?m.inning1:m.inning2;
+  if(!inn) return closeModal('modal-admin-edit');
+
+  // Apply edit
+  if(editContext.oIdx===-1){
+    if(editContext.newVal==='DELETE') inn.currentOver.splice(editContext.bIdx,1);
+    else inn.currentOver[editContext.bIdx]=editContext.newVal;
+  } else {
+    if(editContext.newVal==='DELETE') inn.overs[editContext.oIdx].splice(editContext.bIdx,1);
+    else inn.overs[editContext.oIdx][editContext.bIdx]=editContext.newVal;
+  }
+
+  // Full recalculation from all balls
+  recalcInnings(inn);
+  save('kgh-matches',matches);
+  closeModal('modal-admin-edit');
+  renderAdminMatchList();
+  showToast('✅ Score updated!');
+}
+
+// Recalculate innings totals from ball log
+function recalcInnings(inn){
+  const allBalls=[...inn.overs.flat(),...inn.currentOver];
+  let runs=0,wickets=0,balls=0,extras=0;
+  Object.keys(inn.batters).forEach(n=>{inn.batters[n].runs=0;inn.batters[n].balls=0;inn.batters[n].fours=0;inn.batters[n].sixes=0;});
+  Object.keys(inn.bowlers).forEach(n=>{inn.bowlers[n].runs=0;inn.bowlers[n].balls=0;inn.bowlers[n].wickets=0;inn.bowlers[n].overs=0;inn.bowlers[n].maidens=0;});
+  allBalls.forEach(b=>{
+    if(b==='W'){wickets++;balls++;}
+    else if(b.startsWith('Wd')){const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;runs+=1+r;extras+=1+r;}
+    else if(b.startsWith('Nb')){const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;runs+=1+r;extras+=1+r;}
+    else if(b.startsWith('Lb')){const r=parseInt(b.replace('Lb',''))||0;runs+=r;extras+=r;balls++;}
+    else{const r=parseInt(b)||0;runs+=r;balls++;}
+  });
+  inn.runs=runs;inn.wickets=wickets;inn.balls=balls;inn.extras=extras;
+}
+
+// PDF SCORECARD
+function shareScorecardPDF(){
+  const sel=document.getElementById('sc-sel');
+  const val=sel.value;
+  const comp=matches.filter(m=>m.result);
+  let m=val==='live'?match:comp[parseInt(val)];
+  if(!m){alert('No match to export');return;}
+
+  // Build printable HTML
+  const css=`body{font-family:Arial,sans-serif;padding:20px;background:#fff;color:#000}h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;margin:16px 0 6px;border-bottom:2px solid #333;padding-bottom:4px}h3{font-size:13px;margin:12px 0 4px;color:#444}table{width:100%;border-collapse:collapse;margin-bottom:12px;font-size:12px}th{background:#333;color:#fff;padding:5px 6px;text-align:left}td{padding:4px 6px;border-bottom:1px solid #ddd}.result{background:#f0fff0;border:2px solid #007a3d;border-radius:6px;padding:10px;text-align:center;margin-bottom:16px;font-size:18px;font-weight:bold}.potm{color:#aa7700;font-size:13px}.fow{font-size:11px;color:#555;margin:4px 0}.footer{font-size:11px;color:#999;margin-top:20px;text-align:center}`;
+
+  let html=`<html><head><meta charset="UTF-8"><style>${css}</style></head><body>`;
+  html+=`<h1>🏏 KGH Scorer</h1>`;
+  html+=`<p style="font-size:13px;color:#555">${m.team1} vs ${m.team2} • ${m.venue}</p>`;
+  if(m.result){html+=`<div class="result">🏆 ${m.result.text||''}${m.result.potm?`<div class="potm">🌟 Player of the Match: ${m.result.potm}</div>`:''}</div>`;}
+
+  [m.inning1,m.inning2].filter(Boolean).forEach((inn,idx)=>{
+    const team=idx===0?m.team1:m.team2;
+    const ov=`${Math.floor(inn.balls/6)}.${inn.balls%6}`;
+    html+=`<h2>${team}: ${inn.runs}/${inn.wickets} (${ov} ov)</h2>`;
+    html+=`<table><thead><tr><th>Batter</th><th>Dismissal</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>`;
+    Object.entries(inn.batters||{}).forEach(([n,s])=>{
+      const sr=s.balls>0?((s.runs/s.balls)*100).toFixed(0):0;
+      html+=`<tr><td><b>${n}</b>${!s.out&&!m.result?'*':''}</td><td style="font-size:11px;color:#555">${s.out?s.dismissal:'not out'}</td><td><b>${s.runs}</b></td><td>${s.balls}</td><td>${s.fours||0}</td><td>${s.sixes||0}</td><td>${sr}</td></tr>`;
+    });
+    html+=`</tbody></table>`;
+    html+=`<p style="font-size:11px;color:#555">Extras: ${inn.extras||0}</p>`;
+    html+=`<h3>Bowling</h3>`;
+    html+=`<table><thead><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th><th>Econ</th><th>M</th></tr></thead><tbody>`;
+    Object.entries(inn.bowlers||{}).forEach(([n,s])=>{
+      const econ=s.balls>0?((s.runs/s.balls)*6).toFixed(2):0;
+      html+=`<tr><td><b>${n}</b></td><td>${s.overs}.${s.balls%6}</td><td>${s.runs}</td><td><b>${s.wickets}</b></td><td>${econ}</td><td>${s.maidens||0}</td></tr>`;
+    });
+    html+=`</tbody></table>`;
+    if(inn.fow&&inn.fow.length){
+      html+=`<p class="fow"><b>Fall of Wickets:</b> ${inn.fow.map(f=>`${f.n}/${f.score} (${f.batter}, ${f.ov})`).join(' • ')}</p>`;
+    }
+  });
+  html+=`<div class="footer">Generated by KGH Scorer • kghscorer.vercel.app</div></body></html>`;
+
+  // Open print dialog
+  const win=window.open('','_blank');
+  if(win){
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(()=>win.print(),500);
+  } else {
+    alert('Please allow popups to generate PDF, then try again.');
+  }
+}
 
 function showToast(msg){const t=document.getElementById('undo-toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 
