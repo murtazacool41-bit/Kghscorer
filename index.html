@@ -5,6 +5,19 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>KGH Scorer</title>
 <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#00ff7f">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="KGH Scorer">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+if('serviceWorker' in navigator){
+  window.addEventListener('load',()=>{
+    navigator.serviceWorker.register('/sw.js').then(()=>console.log('SW ready')).catch(()=>{});
+  });
+}
+</script>
 <style>
 :root{--green:#00ff7f;--green-dim:#00c45f;--dark:#050f0a;--card:#0a1a10;--card2:#0f2218;--border:#1a3d25;--text:#e0ffe8;--muted:#5a8a6a;--red:#ff4444;--gold:#ffd700;--blue:#00cfff;--purple:#b06fff;--orange:#ff8c00}
 *{box-sizing:border-box;margin:0;padding:0}
@@ -723,7 +736,15 @@ function processDelivery(extType,runs,dismissType,fielder){
   const bwl=inn.bowlers[match.currentBowler];
   const str=inn.batters[match.striker];
   let legal=true,chip='',comm='';
-  const wasNb=isFreeHit; // current ball is free hit if prev was NB
+  const wasNb=isFreeHit;
+
+  // Save FULL deep snapshot BEFORE changing anything
+  const preSnap=JSON.parse(JSON.stringify({
+    innings:match.innings,striker:match.striker,nonStriker:match.nonStriker,
+    currentBowler:match.currentBowler,isFreeHit:wasNb,
+    inning1:match.inning1,inning2:match.inning2,
+    commentary:[...match.commentary]
+  }));
 
   if(extType==='Wd'){
     const total=1+(runs||0);
@@ -759,13 +780,8 @@ function processDelivery(extType,runs,dismissType,fielder){
     isFreeHit=false;
   }
 
-  // Save to ball log for undo
-  match.ballLog.push({extType,runs,dismissType,fielder,chip,isFreeHitBefore:wasNb,
-    snap:{runs:inn.runs,wickets:inn.wickets,balls:inn.balls,extras:inn.extras,
-      striker:match.striker,nonStriker:match.nonStriker,currentBowler:match.currentBowler,
-      batter_runs:str?str.runs:0,batter_balls:str?str.balls:0,
-      bwl_runs:bwl.runs,bwl_balls:bwl.balls,bwl_wkts:bwl.wickets,
-      currentOver:[...inn.currentOver],isFreeHit}});
+  // Push pre-ball snapshot for perfect undo
+  match.ballLog.push({chip, snap: preSnap});
 
   inn.currentOver.push(chip);
   match.commentary.unshift({ov:ovStr(inn.balls),chip,text:comm});
@@ -818,33 +834,20 @@ function sameBowlerContinue(){
   updateUI();
 }
 
-// UNDO
+// UNDO — full snapshot restore
 function undoBall(){
   if(!match||!match.ballLog||match.ballLog.length===0){showToast('Nothing to undo!');return;}
   const last=match.ballLog.pop();
-  const inn=curInn();
-  const snap=last.snap;
-
-  // Restore innings state
-  inn.runs=snap.runs;inn.wickets=snap.wickets;inn.balls=snap.balls;inn.extras=snap.extras;
-  inn.currentOver=[...snap.currentOver];
-  match.striker=snap.striker;match.nonStriker=snap.nonStriker;match.currentBowler=snap.currentBowler;
-  isFreeHit=snap.isFreeHitBefore||false;
-
-  // Restore batter
-  const str=inn.batters[snap.striker];
-  if(str){str.runs=snap.batter_runs;str.balls=snap.batter_balls;}
-
-  // Restore bowler
-  const bwl=inn.bowlers[match.currentBowler];
-  if(bwl){bwl.runs=snap.bwl_runs;bwl.balls=snap.bwl_balls;bwl.wickets=snap.bwl_wkts;}
-
-  // Remove last commentary
-  if(match.commentary.length) match.commentary.shift();
-
-  // Remove last FOW if wicket
-  if(last.dismissType&&inn.fow.length) inn.fow.pop();
-
+  const s=last.snap;
+  // Fully restore match state from deep snapshot
+  match.innings=s.innings;
+  match.striker=s.striker;
+  match.nonStriker=s.nonStriker;
+  match.currentBowler=s.currentBowler;
+  match.inning1=s.inning1;
+  match.inning2=s.inning2;
+  match.commentary=s.commentary;
+  isFreeHit=s.isFreeHit||false;
   document.getElementById('freehit-banner').classList.toggle('show',isFreeHit);
   showToast('↩ Undone!');
   updateUI();
