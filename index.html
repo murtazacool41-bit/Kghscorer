@@ -185,7 +185,7 @@ tr:hover td{background:#00ff7f04}
   <div class="login-logo">KGH<span style="color:var(--text)">Scorer</span></div>
   <div class="login-sub">Cricket Scoring for Everyone 🏏</div>
   <div class="login-card">
-    <div class="form-group"><label>EMAIL (Gmail)</label><input type="email" id="login-email" placeholder="you@gmail.com"></div>
+    <div class="form-group"><label>EMAIL</label><input type="email" id="login-email" placeholder="you@gmail.com" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <div class="form-group"><label>PASSWORD</label><input type="password" id="login-pass" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()"></div>
     <button class="btn-primary" onclick="doLogin()">LOGIN</button>
     <div id="login-err" style="color:var(--red);font-size:0.8rem;margin-top:0.5rem;display:none"></div>
@@ -572,37 +572,60 @@ function setTheme(t){document.body.setAttribute('data-theme',t);localStorage.set
 setTheme(localStorage.getItem('kgh-theme')||'');
 
 // ═══ AUTH ═══
-function showRegister(){document.getElementById('register-card').style.display='block';}
-function hideRegister(){document.getElementById('register-card').style.display='none';}
+function showRegister(){
+  document.getElementById('register-card').style.display='block';
+  document.getElementById('login-err').style.display='none';
+}
+function hideRegister(){
+  document.getElementById('register-card').style.display='none';
+  document.getElementById('reg-err').style.display='none';
+}
 
 function doRegister(){
   const name=document.getElementById('reg-name').value.trim();
   const email=document.getElementById('reg-email').value.trim().toLowerCase();
   const pass=document.getElementById('reg-pass').value;
   const errEl=document.getElementById('reg-err');
-  if(!name||!email||!pass){errEl.textContent='Fill all fields';errEl.style.display='block';return;}
-  if(!email.includes('@')){errEl.textContent='Enter valid email';errEl.style.display='block';return;}
-  if(pass.length<6){errEl.textContent='Password min 6 characters';errEl.style.display='block';return;}
-  if(accounts.find(a=>a.email===email)){errEl.textContent='Email already registered';errEl.style.display='block';return;}
-  accounts.push({email,password:pass,name,role:'user',createdAt:new Date().toISOString().split('T')[0],matchCount:0,lastLogin:new Date().toISOString()});
+  errEl.style.display='none';
+  if(!name){errEl.textContent='Enter your name';errEl.style.display='block';return;}
+  if(!email||!email.includes('@')||!email.includes('.')){errEl.textContent='Enter a valid email address';errEl.style.display='block';return;}
+  if(!pass||pass.length<6){errEl.textContent='Password must be at least 6 characters';errEl.style.display='block';return;}
+  // reload accounts fresh from storage
+  accounts=JSON.parse(localStorage.getItem('kgh-accounts')||'[]');
+  if(!accounts.length){accounts=[{email:'admin@kgh.com',password:'kgh2024',name:'Admin',role:'admin',createdAt:'2024-01-01',matchCount:0}];}
+  if(accounts.find(a=>a.email===email)){errEl.textContent='This email is already registered';errEl.style.display='block';return;}
+  const newAcc={email,password:pass,name,role:'user',createdAt:new Date().toISOString().split('T')[0],matchCount:0,lastLogin:null};
+  accounts.push(newAcc);
   save('kgh-accounts',accounts);
   errEl.style.display='none';
-  alert('Account created! Please login.');
+  // Auto-login after register
+  currentUser={...newAcc};
   hideRegister();
+  launchApp();
 }
 
 function doLogin(){
   const email=document.getElementById('login-email').value.trim().toLowerCase();
   const pass=document.getElementById('login-pass').value;
   const errEl=document.getElementById('login-err');
+  errEl.style.display='none';
+  if(!email||!pass){errEl.textContent='Enter email and password';errEl.style.display='block';return;}
+  // reload accounts fresh from storage each time
+  accounts=JSON.parse(localStorage.getItem('kgh-accounts')||'[]');
+  if(!accounts.length){
+    accounts=[{email:'admin@kgh.com',password:'kgh2024',name:'Admin',role:'admin',createdAt:'2024-01-01',matchCount:0,lastLogin:null}];
+    save('kgh-accounts',accounts);
+  }
   const acc=accounts.find(a=>a.email===email&&a.password===pass);
-  if(!acc){errEl.textContent='Wrong email or password!';errEl.style.display='block';return;}
-  acc.lastLogin=new Date().toISOString();save('kgh-accounts',accounts);
-  currentUser={...acc};launchApp();
+  if(!acc){errEl.textContent='Wrong email or password. Try again!';errEl.style.display='block';return;}
+  acc.lastLogin=new Date().toISOString();
+  save('kgh-accounts',accounts);
+  currentUser={...acc};
+  launchApp();
 }
 
 function doGuest(){
-  currentUser={name:'Guest',role:'guest',email:'guest'};
+  currentUser={name:'Guest',role:'guest',email:'guest@guest.com'};
   launchApp();
 }
 
@@ -1040,7 +1063,7 @@ function renderAdminUsers(){
       <div style="font-size:0.72rem;color:var(--muted)">${a.name} • Joined: ${a.createdAt||'N/A'}</div>
       <div style="font-size:0.7rem;color:var(--muted)">Last login: ${a.lastLogin?a.lastLogin.split('T')[0]:'Never'}</div>
     </div>
-    <div><span style="color:${a.role==='admin'?'var(--gold)':'var(--green)'];font-size:0.8rem;font-weight:700">${a.role}</span></div>
+    <div><span style="color:${a.role==='admin'?'var(--gold)':'var(--green)'};font-size:0.8rem;font-weight:700">${a.role}</span></div>
     <div style="font-family:'JetBrains Mono',monospace">${a.matchCount||0}</div>
     <div>
       ${a.role!=='admin'?`<button class="btn-danger btn-sm" onclick="deleteAccount(${i})">Del</button>`:'<span style="color:var(--muted);font-size:0.72rem">Admin</span>'}
