@@ -247,8 +247,8 @@ tr:hover td{background:#00ff7f04}
       </div>
       <div id="team-select-section">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem">
-          <div class="form-group"><label>TEAM 1 (BATS FIRST)</label><select id="s-t1"><option value="">Select</option></select></div>
-          <div class="form-group"><label>TEAM 2</label><select id="s-t2"><option value="">Select</option></select></div>
+          <div class="form-group"><label>TEAM 1 (BATS FIRST)</label><select id="s-t1" onchange="onTeamChange()"><option value="">Select</option></select></div>
+          <div class="form-group"><label>TEAM 2</label><select id="s-t2" onchange="onTeamChange()"><option value="">Select</option></select></div>
         </div>
       </div>
       <div id="instant-team-section" style="display:none">
@@ -262,6 +262,21 @@ tr:hover td{background:#00ff7f04}
           <select id="s-overs"><option value="5">5</option><option value="6">6</option><option value="8">8</option><option value="10">10</option><option value="15">15</option><option value="20" selected>20</option><option value="50">50</option></select>
         </div>
         <div class="form-group"><label>VENUE</label><input id="s-venue" placeholder="KGH Ground"></div>
+      </div>
+      <!-- TOSS -->
+      <div style="background:var(--card2);border:1px solid var(--border);border-radius:8px;padding:0.7rem;margin-bottom:0.9rem">
+        <div style="font-family:'Bebas Neue',sans-serif;font-size:0.95rem;color:var(--gold);letter-spacing:1px;margin-bottom:0.5rem">🪙 TOSS</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
+          <div class="form-group" style="margin-bottom:0"><label>TOSS WON BY</label>
+            <select id="toss-winner"><option value="">Select</option></select>
+          </div>
+          <div class="form-group" style="margin-bottom:0"><label>ELECTED TO</label>
+            <select id="toss-elected">
+              <option value="bat">Bat</option>
+              <option value="bowl">Bowl</option>
+            </select>
+          </div>
+        </div>
       </div>
       <div class="card-title">TEAM 1 OPENERS</div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem">
@@ -336,6 +351,11 @@ tr:hover td{background:#00ff7f04}
         <div class="ext-type-btn" id="ext-Wd" onclick="selectExtType('Wd')">Wide</div>
         <div class="ext-type-btn" id="ext-Nb" onclick="selectExtType('Nb')">No Ball</div>
         <div class="ext-type-btn" id="ext-Lb" onclick="selectExtType('Lb')">Leg Bye</div>
+        <div class="ext-type-btn" id="ext-B" onclick="selectExtType('B')">Bye</div>
+      </div>
+      <div id="nb-wicket-row" style="display:none;margin-top:0.5rem">
+        <div style="font-size:0.7rem;color:var(--red);margin-bottom:0.35rem">⚠️ No Ball — only Run Out allowed:</div>
+        <button class="run-btn wicket" style="width:100%;font-size:0.9rem;padding:0.5rem" onclick="addNbWicket()">🔴 NB + RUN OUT</button>
       </div>
       <div id="ext-runs-row" style="display:none">
         <div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.35rem" id="ext-label">Select runs:</div>
@@ -690,7 +710,26 @@ function closeModal(id){document.getElementById(id).classList.remove('open');}
 function saveTeam(){const name=document.getElementById('tm-name').value.trim();if(!name)return alert('Enter team name');teams.push({id:Date.now(),name,ground:document.getElementById('tm-ground').value.trim(),players:document.getElementById('tm-players').value.split(',').map(p=>p.trim()).filter(Boolean)});save('kgh-teams',teams);closeModal('modal-team');['tm-name','tm-ground','tm-players'].forEach(id=>document.getElementById(id).value='');renderTeams();populateDropdowns();}
 function renderTeams(){const el=document.getElementById('teams-list');if(!teams.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏏</div><div>No teams yet</div></div>';return;}el.innerHTML=teams.map(t=>{const tm=matches.filter(m=>m.team1===t.name||m.team2===t.name);const w=tm.filter(m=>m.result&&m.result.winner===t.name).length;return`<div class="team-item"><div><div style="font-weight:700">${t.name}</div><div style="font-size:0.75rem;color:var(--muted)">${t.ground||'No ground'} • ${t.players.length} players</div><div style="font-size:0.73rem;color:var(--muted);margin-top:3px">${t.players.slice(0,5).join(', ')}${t.players.length>5?'...':''}</div><div style="font-size:0.73rem;margin-top:4px"><span style="color:var(--green)">${w}W</span> <span style="color:var(--red)">${tm.length-w}L</span></div></div><button class="btn-danger btn-sm" onclick="deleteTeam(${t.id})">✕</button></div>`;}).join('');}
 function deleteTeam(id){if(!confirm('Delete?'))return;teams=teams.filter(t=>t.id!==id);save('kgh-teams',teams);renderTeams();}
-function populateDropdowns(){['s-t1','s-t2'].forEach(id=>{const s=document.getElementById(id),v=s.value;s.innerHTML='<option value="">Select</option>'+teams.map(t=>`<option value="${t.name}">${t.name}</option>`).join('');s.value=v;});}
+function populateDropdowns(){
+  ['s-t1','s-t2'].forEach(id=>{
+    const s=document.getElementById(id),v=s.value;
+    s.innerHTML='<option value="">Select</option>'+teams.map(t=>`<option value="${t.name}">${t.name}</option>`).join('');
+    s.value=v;
+  });
+  // Update toss dropdown when teams change
+  const t1=document.getElementById('s-t1').value;
+  const t2=document.getElementById('s-t2').value;
+  const tw=document.getElementById('toss-winner');
+  if(tw){tw.innerHTML='<option value="">Select</option>'+(t1?`<option value="${t1}">${t1}</option>`:'')+( t2?`<option value="${t2}">${t2}</option>`:'');}
+}
+// Update toss dropdown live when team selected
+function onTeamChange(){
+  populateDropdowns();
+  const t1=document.getElementById('s-t1').value;
+  const t2=document.getElementById('s-t2').value;
+  const tw=document.getElementById('toss-winner');
+  if(tw){tw.innerHTML='<option value="">Select</option>'+(t1?`<option value="${t1}">${t1}</option>`:'')+( t2?`<option value="${t2}">${t2}</option>`:'');}
+}
 function toggleInstant(){const on=document.getElementById('instant-toggle').checked;document.getElementById('team-select-section').style.display=on?'none':'block';document.getElementById('instant-team-section').style.display=on?'block':'none';}
 
 // ═══ PLAYERS ═══
@@ -722,6 +761,7 @@ function startMatch(){
   match={id:Date.now(),team1:t1,team2:t2,venue,overs,innings:1,result:null,
     inning1:newInn(),inning2:null,striker:b1,nonStriker:b2,currentBowler:bwl,
     commentary:[],ballLog:[],instant,
+    toss:{winner:document.getElementById('toss-winner').value||t1,elected:document.getElementById('toss-elected').value||'bat'},
     createdBy:currentUser?.email||'guest'};
   initBat(match.inning1,b1);initBat(match.inning1,b2);initBowl(match.inning1,bwl);
   match.inning1.partnerships=[{b1,b2,runs:0,balls:0}];
@@ -753,9 +793,53 @@ function ovStr(b){return`${Math.floor(b/6)}.${b%6}`;}
 function swapStrike(){if(!match||match.result)return;let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;showToast('🔄 Strike swapped!');updateUI();}
 
 // EXTRAS
-function selectExtType(type){selectedExtType=type;document.querySelectorAll('.ext-type-btn').forEach(b=>b.classList.remove('active'));document.getElementById('ext-'+type).classList.add('active');document.getElementById('ext-runs-row').style.display='block';const labels={Wd:'Wide + runs (1 auto-added):',Nb:'No Ball + runs (1 auto-added, ball counts on batter):',Lb:'Leg Bye runs (not on bowler):'};document.getElementById('ext-label').textContent=labels[type];}
-function clearExtType(){selectedExtType='';document.querySelectorAll('.ext-type-btn').forEach(b=>b.classList.remove('active'));document.getElementById('ext-runs-row').style.display='none';}
+function selectExtType(type){
+  selectedExtType=type;
+  document.querySelectorAll('.ext-type-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ext-'+type).classList.add('active');
+  document.getElementById('ext-runs-row').style.display='block';
+  document.getElementById('nb-wicket-row').style.display=type==='Nb'?'block':'none';
+  const labels={
+    Wd:'Wide + runs (1 auto-added, no ball to batter):',
+    Nb:'No Ball + runs (1 auto-added, ball counts on batter):',
+    Lb:'Leg Bye runs (not on bowler, ball on batter):',
+    B:'Bye runs (not on bowler or batter):'
+  };
+  document.getElementById('ext-label').textContent=labels[type];
+}
+function clearExtType(){
+  selectedExtType='';
+  document.querySelectorAll('.ext-type-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('ext-runs-row').style.display='none';
+  document.getElementById('nb-wicket-row').style.display='none';
+}
 function addExtra(runs){if(!selectedExtType)return;const type=selectedExtType;clearExtType();processDelivery(type,runs,null,null);}
+
+// NB + RUN OUT only valid wicket on no ball
+function addNbWicket(){
+  if(!match||match.result) return;
+  const inn=curInn();
+  const bwl=inn.bowlers[match.currentBowler];
+  const str=inn.batters[match.striker];
+  const wasNb=isFreeHit;
+  const preSnap=JSON.parse(JSON.stringify({innings:match.innings,striker:match.striker,nonStriker:match.nonStriker,currentBowler:match.currentBowler,isFreeHit:wasNb,inning1:match.inning1,inning2:match.inning2,commentary:[...match.commentary]}));
+  // +1 no ball penalty
+  inn.runs+=1;inn.extras+=1;bwl.runs+=1;str.balls++;
+  // run out wicket — NOT credited to bowler
+  inn.wickets++;inn.balls++;bwl.balls++;
+  str.out=true;str.dismissal='run out (no ball)';
+  inn.fow.push({n:inn.wickets,score:inn.runs,ov:ovStr(inn.balls),batter:match.striker,dis:str.dismissal});
+  endPart(inn,match.striker);
+  isFreeHit=false;
+  const comm=`NO BALL + RUN OUT! ${match.striker} run out. ${inn.runs}/${inn.wickets}`;
+  match.ballLog.push({chip:'Nb+RO',snap:preSnap});
+  inn.currentOver.push('Nb');
+  match.commentary.unshift({ov:ovStr(inn.balls),chip:'W',text:comm});
+  clearExtType();
+  document.getElementById('freehit-banner').classList.remove('show');
+  if(inn.wickets<10) showNewBatterModal();
+  else endInnings();
+}
 
 // MAIN BALL
 function addBall(val){
@@ -796,12 +880,17 @@ function processDelivery(extType,runs,dismissType,fielder){
     isFreeHit=true;
     if(runs>0&&runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(extType==='Lb'){
-    // Leg Bye — runs go to team but NOT on bowler figures, ball counts on batter
+    // Leg Bye — runs to team, NOT on bowler, ball counts on batter
     inn.runs+=runs;inn.extras+=runs;
-    bwl.balls++; // legal delivery counts on bowler overs only
-    str.balls++; // ball counts on batter figure
-    inn.balls++;
+    bwl.balls++;str.balls++;inn.balls++;
     legal=true;chip=`Lb${runs}`;comm=`Leg bye. ${runs} run${runs!==1?'s':''}.`;
+    isFreeHit=false;
+    if(runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
+  } else if(extType==='B'){
+    // Bye — runs to team, NOT on bowler, NOT on batter
+    inn.runs+=runs;inn.extras+=runs;
+    bwl.balls++;inn.balls++; // ball counts for over, NOT on batter
+    legal=true;chip=`B${runs}`;comm=`Bye! Ball beat everyone. ${runs} run${runs!==1?'s':''}.`;
     isFreeHit=false;
     if(runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(dismissType){
@@ -976,7 +1065,7 @@ function updateUI(){
   document.getElementById('lv-score').textContent=`${inn.runs}/${inn.wickets}`;
   document.getElementById('lv-overs').textContent=`${ov} overs • CRR: ${crr}`;
   document.getElementById('lv-teams').textContent=match.innings===1?`${match.team1} vs ${match.team2}`:`${match.team2} chasing ${match.inning1.runs+1}`;
-  document.getElementById('lv-venue').textContent=match.venue;
+  document.getElementById('lv-venue').textContent=match.venue+(match.toss?` • 🪙 ${match.toss.winner} won toss`:'');
   if(match.innings===2){const need=match.inning1.runs+1-inn.runs;const bl=match.overs*6-inn.balls;document.getElementById('lv-target').textContent=`Need ${need} from ${bl} balls • RRR: ${bl>0?((need/bl)*6).toFixed(2):'0.00'}`;}
   else document.getElementById('lv-target').textContent='';
   const b1=inn.batters[match.striker]||{runs:0,balls:0,fours:0,sixes:0};
@@ -1119,20 +1208,48 @@ function confirmEditBall(){
   showToast('✅ Score updated!');
 }
 
-// Recalculate innings totals from ball log
+// Full recalculation from ball log after admin edit
 function recalcInnings(inn){
   const allBalls=[...inn.overs.flat(),...inn.currentOver];
-  let runs=0,wickets=0,balls=0,extras=0;
-  Object.keys(inn.batters).forEach(n=>{inn.batters[n].runs=0;inn.batters[n].balls=0;inn.batters[n].fours=0;inn.batters[n].sixes=0;});
-  Object.keys(inn.bowlers).forEach(n=>{inn.bowlers[n].runs=0;inn.bowlers[n].balls=0;inn.bowlers[n].wickets=0;inn.bowlers[n].overs=0;inn.bowlers[n].maidens=0;});
-  allBalls.forEach(b=>{
-    if(b==='W'){wickets++;balls++;}
-    else if(b.startsWith('Wd')){const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;runs+=1+r;extras+=1+r;}
-    else if(b.startsWith('Nb')){const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;runs+=1+r;extras+=1+r;}
-    else if(b.startsWith('Lb')){const r=parseInt(b.replace('Lb',''))||0;runs+=r;extras+=r;balls++;}
-    else{const r=parseInt(b)||0;runs+=r;balls++;}
+  // Reset all counters
+  inn.runs=0;inn.wickets=0;inn.balls=0;inn.extras=0;
+  Object.keys(inn.batters).forEach(n=>{
+    inn.batters[n].runs=0;inn.batters[n].balls=0;
+    inn.batters[n].fours=0;inn.batters[n].sixes=0;
   });
-  inn.runs=runs;inn.wickets=wickets;inn.balls=balls;inn.extras=extras;
+  Object.keys(inn.bowlers).forEach(n=>{
+    inn.bowlers[n].runs=0;inn.bowlers[n].balls=0;
+    inn.bowlers[n].wickets=0;inn.bowlers[n].overs=0;inn.bowlers[n].maidens=0;
+  });
+  // Reset partnerships and FOW — rebuild from scratch not possible without full ball history
+  // So just recalculate totals from chips
+  allBalls.forEach(b=>{
+    if(b==='W'){inn.wickets++;inn.balls++;}
+    else if(b.startsWith('Wd')){
+      const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;
+      inn.runs+=1+r;inn.extras+=1+r;
+    }
+    else if(b.startsWith('Nb')){
+      const r=b.includes('+')?parseInt(b.split('+')[1])||0:0;
+      inn.runs+=1+r;inn.extras+=1+r;
+    }
+    else if(b.startsWith('Lb')){
+      const r=parseInt(b.replace('Lb',''))||0;
+      inn.runs+=r;inn.extras+=r;inn.balls++;
+    }
+    else if(b.startsWith('B')){
+      const r=parseInt(b.replace('B',''))||0;
+      inn.runs+=r;inn.extras+=r;inn.balls++;
+    }
+    else{
+      const r=parseInt(b)||0;
+      inn.runs+=r;inn.balls++;
+    }
+  });
+  // Recalc overs from balls
+  Object.keys(inn.bowlers).forEach(n=>{
+    inn.bowlers[n].overs=Math.floor(inn.bowlers[n].balls/6);
+  });
 }
 
 // PDF SCORECARD
