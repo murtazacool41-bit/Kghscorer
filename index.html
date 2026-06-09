@@ -430,8 +430,7 @@ tr:hover td{background:#00ff7f04}
     </div>
   </div>
   <div class="card"><div class="card-title">TOP BATTERS</div><table><thead><tr><th>PLAYER</th><th>M</th><th>RUNS</th><th>HS</th><th>AVG</th><th>SR</th><th>50s</th><th>100s</th></tr></thead><tbody id="bat-tbody"></tbody></table></div>
-  <div class="card"><div class="card-title">TOP BOWLERS</div><table><thead><tr><th>PLAYER</th><th>M</th><th>WKTS</th><th>RUNS</th><th>AVG</th><th>ECON</th><th>BB</th></tr></thead><tbody id="bowl-tbody"></tbody></table></div>
-</div>
+  <div class="card"><div class="card-title">TOP BOWLERS</div><table><thead><tr><th>PLAYER</th><th>M</th><th>WKTS</th><th>RUNS</th><th>AVG</th><th>ECON</th><th>BB</th></tr></thead><tbody id="bowl-tbody"></tbody></table></div></div>
 
 <!-- ADMIN -->
 <div id="page-admin" class="page">
@@ -489,14 +488,17 @@ tr:hover td{background:#00ff7f04}
   <div class="modal-actions"><button class="btn-primary" onclick="saveTournament()">CREATE</button><button class="btn-secondary" onclick="closeModal('modal-tournament')">CANCEL</button></div>
 </div></div>
 
+
 <div class="modal-overlay" id="modal-wicket"><div class="modal">
   <div class="modal-title">🔴 WICKET!</div>
 
+  <!-- Batter -->
   <div class="form-group">
     <label>DISMISSED BATTER</label>
     <select id="wk-batter"></select>
   </div>
 
+  <!-- Dismissal type -->
   <div class="form-group">
     <label>DISMISSAL TYPE</label>
     <div class="dismiss-grid" style="grid-template-columns:repeat(3,1fr)">
@@ -515,34 +517,46 @@ tr:hover td{background:#00ff7f04}
     </div>
   </div>
 
+  <!-- Fielder — only for Caught, Run Out, Stumped -->
   <div class="form-group" id="fielder-group" style="display:none">
     <label id="fielder-label">FIELDER / KEEPER</label>
     <input id="wk-fielder" placeholder="Name">
   </div>
 
+  <!-- Delivery type — only for Run Out and Stumped -->
   <div class="form-group" id="delivery-type-group" style="display:none">
-    <label>WAS THIS ON AN EXTRA? (optional)</label>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.35rem">
-      <div class="dismiss-btn active-dt" id="dt-normal" onclick="selectDeliveryType('normal',this)" style="color:var(--green);border-color:var(--green)">Normal</div>
+    <label id="delivery-type-label">DELIVERY TYPE</label>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.35rem" id="delivery-type-btns">
+      <div class="dismiss-btn sel" id="dt-normal" onclick="selectDeliveryType('normal',this)">Normal</div>
       <div class="dismiss-btn" id="dt-wide" onclick="selectDeliveryType('wide',this)">Wide</div>
       <div class="dismiss-btn" id="dt-noball" onclick="selectDeliveryType('noball',this)">No Ball</div>
       <div class="dismiss-btn" id="dt-legbye" onclick="selectDeliveryType('legbye',this)">Leg Bye</div>
     </div>
-    <div id="dt-noball-notice" style="display:none;font-size:0.72rem;color:var(--orange);margin-top:0.3rem">⚠️ On No Ball — wicket counts as Run Out only</div>
+    <div id="dt-notice" style="display:none;font-size:0.72rem;color:var(--orange);margin-top:0.3rem"></div>
   </div>
 
+  <!-- Runs — only for Run Out (any delivery) -->
   <div class="form-group" id="wk-runs-group" style="display:none">
-    <label>RUNS SCORED ON THIS BALL (before dismissal)</label>
+    <label id="wk-runs-label">RUNS SCORED BEFORE RUN OUT</label>
     <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.3rem">
-      <button class="ext-run-btn" onclick="selectWkRuns(0,this)">0</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(1,this)">1</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(2,this)">2</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(3,this)">3</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(4,this)">4</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(5,this)">5</button>
-      <button class="ext-run-btn" onclick="selectWkRuns(6,this)">6</button>
+      <button class="ext-run-btn" id="wkr-0" onclick="selectWkRuns(0,this)">0</button>
+      <button class="ext-run-btn" id="wkr-1" onclick="selectWkRuns(1,this)">1</button>
+      <button class="ext-run-btn" id="wkr-2" onclick="selectWkRuns(2,this)">2</button>
+      <button class="ext-run-btn" id="wkr-3" onclick="selectWkRuns(3,this)">3</button>
+      <button class="ext-run-btn" id="wkr-4" onclick="selectWkRuns(4,this)">4</button>
+      <button class="ext-run-btn" id="wkr-5" onclick="selectWkRuns(5,this)">5</button>
+      <button class="ext-run-btn" id="wkr-6" onclick="selectWkRuns(6,this)">6</button>
     </div>
-    <div id="wk-runs-preview" style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">Runs before dismissal: 0</div>
+    <!-- Runs source — only shown for No Ball with runs -->
+    <div id="wk-runs-source-group" style="display:none;margin-top:0.5rem">
+      <div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.35rem">WHERE DID THE RUNS COME FROM?</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:0.35rem">
+        <div class="dismiss-btn sel" id="wkrs-bat" onclick="selectRunsSource('bat',this)">From Bat</div>
+        <div class="dismiss-btn" id="wkrs-legbye" onclick="selectRunsSource('legbye',this)">Leg Bye</div>
+        <div class="dismiss-btn" id="wkrs-bye" onclick="selectRunsSource('bye',this)">Bye</div>
+      </div>
+    </div>
+    <div id="wk-runs-preview" style="font-size:0.78rem;color:var(--green);margin-top:0.4rem">Runs: 0</div>
   </div>
 
   <div class="modal-actions">
@@ -550,6 +564,7 @@ tr:hover td{background:#00ff7f04}
     <button class="btn-secondary" onclick="closeModal('modal-wicket')">CANCEL</button>
   </div>
 </div></div>
+
 
 <div class="modal-overlay" id="modal-innings"><div class="modal">
   <div class="modal-title">INNINGS BREAK</div>
@@ -910,36 +925,43 @@ function processDelivery(extType,runs,dismissType,fielder){
   let legal=true,chip='',comm='';
 
   if(extType==='Wd'){
-    // FIX 6: Wide — NOT legal, no ball count on batter
     const total=1+(runs||0);
     inn.runs+=total;inn.extras+=total;bwl.runs+=total;
+    inn.extrasBreakdown=inn.extrasBreakdown||{wides:0,noballs:0,legbyes:0,byes:0};
+    inn.extrasBreakdown.wides+=total;
     legal=false;chip=runs>0?`Wd+${runs}`:'Wd';
     comm=`Wide${runs>0?' +'+runs+' runs':''} by ${match.currentBowler}. +${total}.`;
     isFreeHit=false;
     if(runs>0&&runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(extType==='Nb'){
-    // FIX 6: No Ball — NOT a legal ball (no over count), but ball DOES count on batter
     const total=1+(runs||0);
     inn.runs+=total;inn.extras+=total;
-    bwl.runs+=total; // runs count on bowler
-    // ball counts on batter stats but NOT legal delivery
-    str.balls++; // FIX 6 — ball added to batter figure
+    inn.extrasBreakdown=inn.extrasBreakdown||{wides:0,noballs:0,legbyes:0,byes:0};
+    inn.extrasBreakdown.noballs+=total;
+    bwl.runs+=total;
+    str.balls++;
     if(runs>0){str.runs+=runs;if(runs===4)str.fours++;if(runs===6)str.sixes++;}
     legal=false;chip=runs>0?`Nb+${runs}`:'Nb';
     comm=`No Ball${runs>0?' +'+runs+' runs':''} by ${match.currentBowler}. +${total}.`;
     isFreeHit=true;
     if(runs>0&&runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(extType==='Lb'){
-    // Leg Bye — runs to team, NOT on bowler, ball counts on batter
+    // Leg Bye — runs to team, NOT on bowler figures, ball counts on batter
     inn.runs+=runs;inn.extras+=runs;
+    inn.extrasBreakdown=inn.extrasBreakdown||{wides:0,noballs:0,legbyes:0,byes:0};
+    inn.extrasBreakdown.legbyes+=runs;
     bwl.balls++;str.balls++;inn.balls++;
+    bwl.dots=(bwl.dots||0)+(runs===0?1:0);
     legal=true;chip=`Lb${runs}`;comm=`Leg bye. ${runs} run${runs!==1?'s':''}.`;
     isFreeHit=false;
     if(runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(extType==='B'){
-    // Bye — runs to team, NOT on bowler, NOT on batter
+    // Bye — runs to team, NOT on bowler, ball counts on batter (same as LB)
     inn.runs+=runs;inn.extras+=runs;
-    bwl.balls++;inn.balls++; // ball counts for over, NOT on batter
+    inn.extrasBreakdown=inn.extrasBreakdown||{wides:0,noballs:0,legbyes:0,byes:0};
+    inn.extrasBreakdown.byes+=runs;
+    bwl.balls++;str.balls++;inn.balls++;
+    bwl.dots=(bwl.dots||0)+(runs===0?1:0);
     legal=true;chip=`B${runs}`;comm=`Bye! Ball beat everyone. ${runs} run${runs!==1?'s':''}.`;
     isFreeHit=false;
     if(runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
@@ -977,10 +999,10 @@ function processDelivery(extType,runs,dismissType,fielder){
   } else {
     const val=runs;
     inn.runs+=val;str.runs+=val;str.balls++;bwl.runs+=val;bwl.balls++;inn.balls++;
-    if(val===4){str.fours++;comm=`FOUR! ${match.striker} hits a boundary!`;}
+    if(val===0){bwl.dots=(bwl.dots||0)+1;comm=`Dot ball. ${match.striker} defends.`;}
+    else if(val===4){str.fours++;comm=`FOUR! ${match.striker} hits a boundary!`;}
     else if(val===6){str.sixes++;comm=`SIX! ${match.striker} goes huge!`;}
-    else if(val===5){comm=`Five runs! Overthrow or misfield.`;}
-    else if(val===0){comm=`Dot ball. ${match.striker} defends.`;}
+    else if(val===5){comm=`Five runs! Overthrow.`;}
     else{comm=`${val} run${val>1?'s':''}.`;}
     chip=val.toString();
     if(val%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
@@ -1143,74 +1165,109 @@ function sameBowlerContinue(){closeModal('modal-over-end');if(match.innings===2&
 // WICKET FLOW
 let wkDeliveryType='normal';
 let wkRuns=0;
+let wkRunsSource='bat';
 
 function showWicketModal(){
   document.getElementById('wk-batter').innerHTML=[match.striker,match.nonStriker].map(n=>`<option>${n}</option>`).join('');
-  selectedDismiss='';wkDeliveryType='normal';wkRuns=0;
+  selectedDismiss='';wkDeliveryType='normal';wkRuns=0;wkRunsSource='bat';
   document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
   document.getElementById('fielder-group').style.display='none';
   document.getElementById('wk-fielder').value='';
   document.getElementById('delivery-type-group').style.display='none';
   document.getElementById('wk-runs-group').style.display='none';
-  document.getElementById('wk-runs-preview').textContent='Runs before dismissal: 0';
-  document.getElementById('dt-noball-notice').style.display='none';
-  // Reset delivery type buttons
+  document.getElementById('wk-runs-preview').textContent='Runs: 0';
   document.querySelectorAll('[id^="dt-"]').forEach(b=>b.classList.remove('sel'));
   document.getElementById('dt-normal').classList.add('sel');
-  // Free hit notice
   document.getElementById('freehit-dismiss-notice').style.display=isFreeHit?'block':'none';
+  // hide optional groups
+  ['dt-notice','wk-runs-source-group'].forEach(id=>{const el=document.getElementById(id);if(el)el.style.display='none';});
   openModal('modal-wicket');
 }
 
 function selectDismiss(type,el){
+  // Free hit — only Run Out, Retired Out, Retired Hurt
+  if(isFreeHit&&!['Run Out','Retired Out','Retired Hurt'].includes(type)){
+    showToast('⚡ FREE HIT! Only Run Out, Retired Out or Retired Hurt!');return;
+  }
   selectedDismiss=type;
   document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
 
-  // On free hit — only Run Out, Retired Out, Retired Hurt allowed
-  if(isFreeHit && !['Run Out','Retired Out','Retired Hurt'].includes(type)){
-    el.classList.remove('sel');
-    selectedDismiss='';
-    showToast('⚡ FREE HIT! Only Run Out, Retired Out or Retired Hurt allowed!');
+  // Reset all optional groups
+  document.getElementById('fielder-group').style.display='none';
+  document.getElementById('delivery-type-group').style.display='none';
+  document.getElementById('wk-runs-group').style.display='none';
+  const dtNotice=document.getElementById('dt-notice');if(dtNotice)dtNotice.style.display='none';
+  const runsSourceGrp=document.getElementById('wk-runs-source-group');if(runsSourceGrp)runsSourceGrp.style.display='none';
+
+  // Retired Hurt / Retired Out — NON DELIVERY, no ball, no runs
+  if(type==='Retired Hurt'||type==='Retired Out'){
+    // nothing extra needed
     return;
   }
 
-  // Fielder needed
-  const needFielder=['Caught','Run Out','Stumped'].includes(type);
-  document.getElementById('fielder-group').style.display=needFielder?'block':'none';
-  document.getElementById('fielder-label').textContent=type==='Caught'?'CAUGHT BY':type==='Stumped'?'STUMPED BY (keeper)':'RUN OUT BY (fielder)';
+  // Fielder for Caught, Run Out, Stumped
+  if(['Caught','Run Out','Stumped'].includes(type)){
+    document.getElementById('fielder-group').style.display='block';
+    document.getElementById('fielder-label').textContent=
+      type==='Caught'?'CAUGHT BY':type==='Stumped'?'STUMPED BY (keeper)':'RUN OUT BY (fielder)';
+  }
 
-  // Retired Hurt — special (can come back)
-  if(type==='Retired Hurt'){
-    document.getElementById('delivery-type-group').style.display='none';
-    document.getElementById('wk-runs-group').style.display='none';
+  // Run Out — show delivery type + runs
+  if(type==='Run Out'){
+    document.getElementById('delivery-type-group').style.display='block';
+    // show Wide, NB, LB options
+    ['dt-wide','dt-noball','dt-legbye'].forEach(id=>document.getElementById(id).style.display='block');
+    document.getElementById('wk-runs-group').style.display='block';
+    document.getElementById('wk-runs-label').textContent='RUNS COMPLETED BEFORE RUN OUT';
     return;
   }
 
-  // Show delivery type for all others
-  document.getElementById('delivery-type-group').style.display='block';
-  document.getElementById('wk-runs-group').style.display='block';
+  // Stumped — only Normal or Wide delivery valid
+  if(type==='Stumped'){
+    document.getElementById('delivery-type-group').style.display='block';
+    document.getElementById('dt-wide').style.display='block';
+    document.getElementById('dt-noball').style.display='none'; // can't stump on NB
+    document.getElementById('dt-legbye').style.display='none'; // can't stump on LB
+    // no runs on stumping
+    return;
+  }
+
+  // All others (Bowled, Caught, LBW, Hit Wicket, Obstruct) — no delivery type, no runs
 }
 
 function selectDeliveryType(type,el){
   wkDeliveryType=type;
   document.querySelectorAll('[id^="dt-"]').forEach(b=>b.classList.remove('sel'));
   el.classList.add('sel');
-  document.getElementById('dt-noball-notice').style.display=type==='noball'?'block':'none';
-  // On no ball, only run out is valid
-  if(type==='noball' && selectedDismiss && selectedDismiss!=='Run Out'){
-    showToast('⚠️ On No Ball only Run Out counts as wicket!');
-    selectedDismiss='Run Out';
-    document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
-    document.querySelector('#modal-wicket .dismiss-btn:nth-child(4)').classList.add('sel');
-  }
+  const notice=document.getElementById('dt-notice');
+  if(type==='noball'){
+    notice.textContent='⚠️ No Ball — only Run Out is valid';notice.style.display='block';
+  } else if(type==='wide'&&selectedDismiss==='Stumped'){
+    notice.textContent='✅ Stumped on Wide — valid';notice.style.display='block';
+  } else {notice.style.display='none';}
+  updateRunsSourceVisibility();
+}
+
+function updateRunsSourceVisibility(){
+  const grp=document.getElementById('wk-runs-source-group');
+  if(!grp)return;
+  // Only ask source if No Ball + runs > 0
+  grp.style.display=(wkDeliveryType==='noball'&&wkRuns>0)?'block':'none';
 }
 
 function selectWkRuns(r,el){
   wkRuns=r;
-  document.querySelectorAll('#wk-runs-group .ext-run-btn').forEach(b=>b.style.borderColor='');
-  if(el){el.style.borderColor='var(--green)';}
-  document.getElementById('wk-runs-preview').textContent=`Runs before dismissal: ${r}`;
+  document.querySelectorAll('[id^="wkr-"]').forEach(b=>b.style.borderColor='');
+  if(el)el.style.borderColor='var(--green)';
+  document.getElementById('wk-runs-preview').textContent=`Runs: ${r}`;
+  updateRunsSourceVisibility();
+}
+
+function selectRunsSource(src,el){
+  wkRunsSource=src;
+  document.querySelectorAll('[id^="wkrs-"]').forEach(b=>b.classList.remove('sel'));
+  if(el)el.classList.add('sel');
 }
 
 function confirmWicket(){
@@ -1220,25 +1277,27 @@ function confirmWicket(){
   if(dis!==match.striker){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   closeModal('modal-wicket');
 
-  // Retired Hurt — no wicket counted
-  if(selectedDismiss==='Retired Hurt'){processRetiredHurt(dis);return;}
+  // Retired Hurt — non delivery, no ball count
+  if(selectedDismiss==='Retired Hurt'){processRetiredHurt(dis,'retired hurt');return;}
+  // Retired Out — non delivery, no ball count
+  if(selectedDismiss==='Retired Out'){processRetiredHurt(dis,'retired out');return;}
 
-  // Map delivery type to extType
   const extMap={normal:null,wide:'Wd',noball:'Nb',legbye:'Lb',bye:'B'};
   const extType=extMap[wkDeliveryType]||null;
-  processDelivery(extType,wkRuns,selectedDismiss,fielder);
+  processDelivery(extType,wkRuns,selectedDismiss,fielder,wkRunsSource);
 }
 
-function processRetiredHurt(batterName){
+function processRetiredHurt(batterName,type){
   const inn=curInn();
   const preSnap=JSON.parse(JSON.stringify({innings:match.innings,striker:match.striker,nonStriker:match.nonStriker,currentBowler:match.currentBowler,isFreeHit,inning1:match.inning1,inning2:match.inning2,commentary:[...match.commentary]}));
-  // Mark as retired hurt but NOT out — can return
-  inn.batters[batterName].retiredHurt=true;
-  inn.batters[batterName].dismissal='retired hurt';
+  // NON DELIVERY — no ball count, no wicket count
+  inn.batters[batterName].retiredHurt=(type==='retired hurt');
+  inn.batters[batterName].out=(type==='retired out');
+  inn.batters[batterName].dismissal=type;
+  if(type==='retired out') inn.wickets++; // retired out counts as wicket
   match.ballLog.push({chip:'RH',snap:preSnap});
-  match.commentary.unshift({ov:ovStr(inn.balls),chip:'RH',text:`${batterName} retired hurt. Can return later.`});
-  showToast(`${batterName} retired hurt — can return later`);
-  // Need new batter but wicket NOT added
+  match.commentary.unshift({ov:ovStr(inn.balls),chip:'RH',text:`${batterName} ${type}. ${type==='retired hurt'?'Can return later.':''}`});
+  showToast(`${batterName} ${type}${type==='retired hurt'?' — can return later':''}`);
   showNewBatterModal();
   updateUI();
 }
@@ -1299,9 +1358,12 @@ function renderScorecard(){
     const team=idx===0?m.team1:m.team2;
     html+=`<div class="card"><div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem"><div class="card-title" style="margin-bottom:0">${team}</div><div style="font-family:'Bebas Neue',sans-serif;font-size:1.4rem;color:var(--green)">${inn.runs}/${inn.wickets} <span style="font-size:0.85rem;color:var(--muted)">(${ovStr(inn.balls)})</span></div></div>
     <div class="sc-table-wrap"><table class="sc-table"><thead><tr><th>BATTER</th><th>DISMISSAL</th><th>R</th><th>B</th><th>4s</th><th>6s</th><th>SR</th></tr></thead><tbody>${Object.entries(inn.batters||{}).map(([n,s])=>{const sr=s.balls>0?((s.runs/s.balls)*100).toFixed(0):0;const rc=s.runs>=100?'sc-100':s.runs>=50?'sc-50':'';return`<tr><td style="min-width:80px"><div style="font-weight:700">${n}${!s.out&&!m.result?'*':''}</div></td><td style="min-width:100px"><div class="sc-dismiss">${s.out?s.dismissal:'not out'}</div></td><td><div class="sc-runs ${rc}">${s.runs}</div></td><td>${s.balls}</td><td style="color:var(--blue)">${s.fours||0}</td><td style="color:var(--gold)">${s.sixes||0}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${sr}</td></tr>`;}).join('')}</tbody></table></div>
-    <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">Extras: ${inn.extras||0}</div>
+    <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem">
+      Extras: ${inn.extras||0}
+      ${inn.extrasBreakdown?` <span style="color:var(--muted)">(Wd: ${inn.extrasBreakdown.wides||0} | NB: ${inn.extrasBreakdown.noballs||0} | LB: ${inn.extrasBreakdown.legbyes||0} | B: ${inn.extrasBreakdown.byes||0})</span>`:''}
+    </div>
     <div class="card-title" style="margin-top:0.9rem">BOWLING</div>
-    <div class="sc-table-wrap"><table class="sc-table"><thead><tr><th>BOWLER</th><th>O</th><th>R</th><th>W</th><th>ECON</th><th>M</th></tr></thead><tbody>${Object.entries(inn.bowlers||{}).map(([n,s])=>`<tr><td style="font-weight:700;min-width:90px">${n}</td><td>${s.overs}.${s.balls%6}</td><td>${s.runs}</td><td style="color:var(--red);font-weight:700">${s.wickets}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${s.balls>0?((s.runs/s.balls)*6).toFixed(2):0}</td><td>${s.maidens||0}</td></tr>`).join('')}</tbody></table></div>
+    <div class="sc-table-wrap"><table class="sc-table"><thead><tr><th>BOWLER</th><th>O</th><th>R</th><th>W</th><th>ECON</th><th>DOTS</th></tr></thead><tbody>${Object.entries(inn.bowlers||{}).map(([n,s])=>`<tr><td style="font-weight:700;min-width:90px">${n}</td><td>${s.overs}.${s.balls%6}</td><td>${s.runs}</td><td style="color:var(--red);font-weight:700">${s.wickets}</td><td style="font-family:'JetBrains Mono',monospace;font-size:0.76rem">${s.balls>0?((s.runs/s.balls)*6).toFixed(2):0}</td><td style="color:var(--muted)">${s.dots||0}</td></tr>`).join('')}</tbody></table></div>
     ${inn.fow&&inn.fow.length?`<div class="card-title" style="margin-top:0.9rem">FALL OF WICKETS</div><div>${inn.fow.map(f=>`<div class="fow-item"><span>${f.n}/${f.score}</span> — ${f.batter} (${f.ov})</div>`).join('')}</div>`:''}
     ${inn.partnerships&&inn.partnerships.length?`<div class="card-title" style="margin-top:0.9rem">PARTNERSHIPS</div><div>${inn.partnerships.map(p=>`<div style="margin-bottom:0.5rem"><div style="display:flex;justify-content:space-between;font-size:0.78rem"><span>${p.b1} & ${p.b2}</span><span style="color:var(--green);font-family:'JetBrains Mono',monospace">${p.runs} (${p.balls})</span></div><div class="part-bar"><div class="part-fill" style="width:${Math.min(100,p.runs)}%"></div></div></div>`).join('')}</div>`:''}
     </div>`;
