@@ -380,6 +380,7 @@ tr:hover td{background:#00ff7f04}
 
     <div style="display:flex;gap:0.35rem;flex-wrap:wrap;margin-top:0.4rem">
       <button class="btn-danger btn-sm" onclick="endInnings()">End Innings</button>
+      <button class="btn-secondary btn-sm" id="btn-return-hurt" style="display:none;color:var(--gold);border-color:var(--gold)" onclick="returnRetiredHurt()">↩ Return Retired Hurt</button>
     </div>
   </div>
 </div>
@@ -490,19 +491,64 @@ tr:hover td{background:#00ff7f04}
 
 <div class="modal-overlay" id="modal-wicket"><div class="modal">
   <div class="modal-title">🔴 WICKET!</div>
-  <div class="form-group"><label>DISMISSED BATTER</label><select id="wk-batter"></select></div>
-  <div class="form-group"><label>DISMISSAL TYPE</label>
-    <div class="dismiss-grid">
+
+  <div class="form-group">
+    <label>DISMISSED BATTER</label>
+    <select id="wk-batter"></select>
+  </div>
+
+  <div class="form-group">
+    <label>DISMISSAL TYPE</label>
+    <div class="dismiss-grid" style="grid-template-columns:repeat(3,1fr)">
       <div class="dismiss-btn" onclick="selectDismiss('Bowled',this)">Bowled</div>
       <div class="dismiss-btn" onclick="selectDismiss('Caught',this)">Caught</div>
       <div class="dismiss-btn" onclick="selectDismiss('LBW',this)">LBW</div>
       <div class="dismiss-btn" onclick="selectDismiss('Run Out',this)">Run Out</div>
       <div class="dismiss-btn" onclick="selectDismiss('Stumped',this)">Stumped</div>
       <div class="dismiss-btn" onclick="selectDismiss('Hit Wicket',this)">Hit Wicket</div>
+      <div class="dismiss-btn" onclick="selectDismiss('Retired Out',this)">Retired Out</div>
+      <div class="dismiss-btn" onclick="selectDismiss('Retired Hurt',this)" style="color:var(--gold)">Retired Hurt</div>
+      <div class="dismiss-btn" onclick="selectDismiss('Obstructing Field',this)">Obstruct</div>
+    </div>
+    <div id="freehit-dismiss-notice" style="display:none;margin-top:0.5rem;font-size:0.75rem;color:var(--gold);background:#44330020;border:1px solid var(--gold);border-radius:6px;padding:0.4rem">
+      ⚡ FREE HIT — Only Run Out, Retired Out and Retired Hurt are valid!
     </div>
   </div>
-  <div class="form-group" id="fielder-group" style="display:none"><label>FIELDER / KEEPER</label><input id="wk-fielder" placeholder="Name"></div>
-  <div class="modal-actions"><button class="btn-primary" onclick="confirmWicket()">CONFIRM</button><button class="btn-secondary" onclick="closeModal('modal-wicket')">CANCEL</button></div>
+
+  <div class="form-group" id="fielder-group" style="display:none">
+    <label id="fielder-label">FIELDER / KEEPER</label>
+    <input id="wk-fielder" placeholder="Name">
+  </div>
+
+  <div class="form-group" id="delivery-type-group" style="display:none">
+    <label>WAS THIS ON AN EXTRA? (optional)</label>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:0.35rem">
+      <div class="dismiss-btn active-dt" id="dt-normal" onclick="selectDeliveryType('normal',this)" style="color:var(--green);border-color:var(--green)">Normal</div>
+      <div class="dismiss-btn" id="dt-wide" onclick="selectDeliveryType('wide',this)">Wide</div>
+      <div class="dismiss-btn" id="dt-noball" onclick="selectDeliveryType('noball',this)">No Ball</div>
+      <div class="dismiss-btn" id="dt-legbye" onclick="selectDeliveryType('legbye',this)">Leg Bye</div>
+    </div>
+    <div id="dt-noball-notice" style="display:none;font-size:0.72rem;color:var(--orange);margin-top:0.3rem">⚠️ On No Ball — wicket counts as Run Out only</div>
+  </div>
+
+  <div class="form-group" id="wk-runs-group" style="display:none">
+    <label>RUNS SCORED ON THIS BALL (before dismissal)</label>
+    <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:0.3rem">
+      <button class="ext-run-btn" onclick="selectWkRuns(0,this)">0</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(1,this)">1</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(2,this)">2</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(3,this)">3</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(4,this)">4</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(5,this)">5</button>
+      <button class="ext-run-btn" onclick="selectWkRuns(6,this)">6</button>
+    </div>
+    <div id="wk-runs-preview" style="font-size:0.78rem;color:var(--green);margin-top:0.3rem">Runs before dismissal: 0</div>
+  </div>
+
+  <div class="modal-actions">
+    <button class="btn-primary" onclick="confirmWicket()">✅ CONFIRM</button>
+    <button class="btn-secondary" onclick="closeModal('modal-wicket')">CANCEL</button>
+  </div>
 </div></div>
 
 <div class="modal-overlay" id="modal-innings"><div class="modal">
@@ -844,7 +890,11 @@ function addNbWicket(){
 // MAIN BALL
 function addBall(val){
   if(!match||match.result)return;clearExtType();
-  if(val==='W'){if(isFreeHit){alert('FREE HIT — batter cannot be out (except Run Out)!');return;}showWicketModal();return;}
+  if(val==='W'){
+    // On free hit, show modal but pre-notice about restrictions
+    showWicketModal();
+    return;
+  }
   processDelivery(null,val,null,null);
 }
 
@@ -894,10 +944,35 @@ function processDelivery(extType,runs,dismissType,fielder){
     isFreeHit=false;
     if(runs%2===1){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
   } else if(dismissType){
-    inn.wickets++;inn.balls++;bwl.balls++;bwl.wickets++;
+    // Determine if this wicket was on an extra delivery
+    const isOnNb = extType==='Nb';
+    const isOnWide = extType==='Wd';
+    const isOnLb = extType==='Lb';
+
+    // On No Ball — only run out counts, NOT credited to bowler
+    const wicketCountsForBowler = !isOnNb && !['Run Out','Obstructing Field'].includes(dismissType);
+
+    // Add extra penalty if on Nb or Wd
+    if(isOnNb){inn.runs+=1;inn.extras+=1;bwl.runs+=1;str.balls++;legal=false;}
+    if(isOnWide){inn.runs+=1;inn.extras+=1;bwl.runs+=1;legal=false;}
+
+    // Add batter runs before dismissal (e.g. run out after scoring 2)
+    if(runs>0){
+      inn.runs+=runs;
+      if(!isOnWide&&!isOnLb){str.runs+=runs;str.balls++;}
+      if(!isOnNb&&!isOnWide&&!isOnLb){bwl.runs+=runs;}
+      if(runs===4)str.fours++;
+      if(runs===6)str.sixes++;
+    }
+
+    inn.wickets++;
+    if(legal||isOnNb){inn.balls++;bwl.balls++;}
+    if(wicketCountsForBowler) bwl.wickets++;
+
     str.out=true;str.dismissal=fmtDismiss(dismissType,match.currentBowler,fielder);
-    chip='W';inn.fow.push({n:inn.wickets,score:inn.runs,ov:ovStr(inn.balls),batter:match.striker,dis:str.dismissal});
-    comm=`WICKET! ${match.striker} ${str.dismissal}. ${inn.runs}/${inn.wickets}`;
+    chip='W';
+    inn.fow.push({n:inn.wickets,score:inn.runs,ov:ovStr(inn.balls),batter:match.striker,dis:str.dismissal});
+    comm=`WICKET! ${match.striker} ${str.dismissal}.${isOnNb?' (No Ball)':isOnWide?' (Wide)':''} ${inn.runs}/${inn.wickets}`;
     endPart(inn,match.striker);isFreeHit=false;
   } else {
     const val=runs;
@@ -972,7 +1047,32 @@ function undoBall(){
   showToast('↩ Undone!');updateUI();
 }
 
-function fmtDismiss(type,bowler,fielder){if(type==='Bowled')return`b ${bowler}`;if(type==='LBW')return`lbw b ${bowler}`;if(type==='Caught')return`c ${fielder||'fielder'} b ${bowler}`;if(type==='Run Out')return`run out (${fielder||'fielder'})`;if(type==='Stumped')return`st ${fielder||'keeper'} b ${bowler}`;if(type==='Hit Wicket')return`hit wicket b ${bowler}`;return type;}
+function returnRetiredHurt(){
+  const inn=curInn();
+  const hurtBatters=Object.entries(inn.batters).filter(([n,s])=>s.retiredHurt&&!s.out);
+  if(!hurtBatters.length){showToast('No retired hurt batters available');return;}
+  const name=hurtBatters[0][0];
+  hurtBatters[0][1].retiredHurt=false;
+  hurtBatters[0][1].dismissal='';
+  match.nonStriker=name;
+  const still=Object.entries(inn.batters).filter(([n,s])=>s.retiredHurt&&!s.out);
+  if(!still.length) document.getElementById('btn-return-hurt').style.display='none';
+  showToast(`${name} returns to bat!`);
+  updateUI();
+}
+
+function fmtDismiss(type,bowler,fielder){
+  if(type==='Bowled')return`b ${bowler}`;
+  if(type==='LBW')return`lbw b ${bowler}`;
+  if(type==='Caught')return`c ${fielder||'fielder'} b ${bowler}`;
+  if(type==='Run Out')return`run out (${fielder||'fielder'})`;
+  if(type==='Stumped')return`st ${fielder||'keeper'} b ${bowler}`;
+  if(type==='Hit Wicket')return`hit wicket b ${bowler}`;
+  if(type==='Retired Out')return`retired out`;
+  if(type==='Retired Hurt')return`retired hurt`;
+  if(type==='Obstructing Field')return`obstructing field`;
+  return type;
+}
 function endPart(inn,out){if(inn.partnerships.length){const p=inn.partnerships[inn.partnerships.length-1];p.ended=true;p.out=out;}}
 function checkWin(){const inn=match.inning2;if(!inn)return false;if(inn.runs>match.inning1.runs){declareResult('chase');return true;}if(match.overs*6-inn.balls<=0||inn.wickets>=10){declareResult('bowled');return true;}return false;}
 
@@ -1040,10 +1140,108 @@ function showOverEndModal(inn,lastBwl){
 function confirmNextBowler(){const n=document.getElementById('next-bowl-inp').value.trim();if(!n)return alert('Enter bowler name');initBowl(curInn(),n);match.currentBowler=n;closeModal('modal-over-end');if(match.innings===2&&!match.result)checkWin();updateUI();}
 function sameBowlerContinue(){closeModal('modal-over-end');if(match.innings===2&&!match.result)checkWin();updateUI();}
 
-// WICKET
-function showWicketModal(){document.getElementById('wk-batter').innerHTML=[match.striker,match.nonStriker].map(n=>`<option>${n}</option>`).join('');selectedDismiss='';document.querySelectorAll('.dismiss-btn').forEach(b=>b.classList.remove('sel'));document.getElementById('fielder-group').style.display='none';document.getElementById('wk-fielder').value='';openModal('modal-wicket');}
-function selectDismiss(type,el){selectedDismiss=type;document.querySelectorAll('.dismiss-btn').forEach(b=>b.classList.remove('sel'));el.classList.add('sel');document.getElementById('fielder-group').style.display=['Caught','Run Out','Stumped'].includes(type)?'block':'none';}
-function confirmWicket(){if(!selectedDismiss)return alert('Select dismissal type');const dis=document.getElementById('wk-batter').value;const fielder=document.getElementById('wk-fielder').value.trim();if(dis!==match.striker){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}closeModal('modal-wicket');processDelivery(null,null,selectedDismiss,fielder);}
+// WICKET FLOW
+let wkDeliveryType='normal';
+let wkRuns=0;
+
+function showWicketModal(){
+  document.getElementById('wk-batter').innerHTML=[match.striker,match.nonStriker].map(n=>`<option>${n}</option>`).join('');
+  selectedDismiss='';wkDeliveryType='normal';wkRuns=0;
+  document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('fielder-group').style.display='none';
+  document.getElementById('wk-fielder').value='';
+  document.getElementById('delivery-type-group').style.display='none';
+  document.getElementById('wk-runs-group').style.display='none';
+  document.getElementById('wk-runs-preview').textContent='Runs before dismissal: 0';
+  document.getElementById('dt-noball-notice').style.display='none';
+  // Reset delivery type buttons
+  document.querySelectorAll('[id^="dt-"]').forEach(b=>b.classList.remove('sel'));
+  document.getElementById('dt-normal').classList.add('sel');
+  // Free hit notice
+  document.getElementById('freehit-dismiss-notice').style.display=isFreeHit?'block':'none';
+  openModal('modal-wicket');
+}
+
+function selectDismiss(type,el){
+  selectedDismiss=type;
+  document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+
+  // On free hit — only Run Out, Retired Out, Retired Hurt allowed
+  if(isFreeHit && !['Run Out','Retired Out','Retired Hurt'].includes(type)){
+    el.classList.remove('sel');
+    selectedDismiss='';
+    showToast('⚡ FREE HIT! Only Run Out, Retired Out or Retired Hurt allowed!');
+    return;
+  }
+
+  // Fielder needed
+  const needFielder=['Caught','Run Out','Stumped'].includes(type);
+  document.getElementById('fielder-group').style.display=needFielder?'block':'none';
+  document.getElementById('fielder-label').textContent=type==='Caught'?'CAUGHT BY':type==='Stumped'?'STUMPED BY (keeper)':'RUN OUT BY (fielder)';
+
+  // Retired Hurt — special (can come back)
+  if(type==='Retired Hurt'){
+    document.getElementById('delivery-type-group').style.display='none';
+    document.getElementById('wk-runs-group').style.display='none';
+    return;
+  }
+
+  // Show delivery type for all others
+  document.getElementById('delivery-type-group').style.display='block';
+  document.getElementById('wk-runs-group').style.display='block';
+}
+
+function selectDeliveryType(type,el){
+  wkDeliveryType=type;
+  document.querySelectorAll('[id^="dt-"]').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  document.getElementById('dt-noball-notice').style.display=type==='noball'?'block':'none';
+  // On no ball, only run out is valid
+  if(type==='noball' && selectedDismiss && selectedDismiss!=='Run Out'){
+    showToast('⚠️ On No Ball only Run Out counts as wicket!');
+    selectedDismiss='Run Out';
+    document.querySelectorAll('#modal-wicket .dismiss-btn').forEach(b=>b.classList.remove('sel'));
+    document.querySelector('#modal-wicket .dismiss-btn:nth-child(4)').classList.add('sel');
+  }
+}
+
+function selectWkRuns(r,el){
+  wkRuns=r;
+  document.querySelectorAll('#wk-runs-group .ext-run-btn').forEach(b=>b.style.borderColor='');
+  if(el){el.style.borderColor='var(--green)';}
+  document.getElementById('wk-runs-preview').textContent=`Runs before dismissal: ${r}`;
+}
+
+function confirmWicket(){
+  if(!selectedDismiss){showToast('Select dismissal type first!');return;}
+  const dis=document.getElementById('wk-batter').value;
+  const fielder=document.getElementById('wk-fielder').value.trim();
+  if(dis!==match.striker){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
+  closeModal('modal-wicket');
+
+  // Retired Hurt — no wicket counted
+  if(selectedDismiss==='Retired Hurt'){processRetiredHurt(dis);return;}
+
+  // Map delivery type to extType
+  const extMap={normal:null,wide:'Wd',noball:'Nb',legbye:'Lb',bye:'B'};
+  const extType=extMap[wkDeliveryType]||null;
+  processDelivery(extType,wkRuns,selectedDismiss,fielder);
+}
+
+function processRetiredHurt(batterName){
+  const inn=curInn();
+  const preSnap=JSON.parse(JSON.stringify({innings:match.innings,striker:match.striker,nonStriker:match.nonStriker,currentBowler:match.currentBowler,isFreeHit,inning1:match.inning1,inning2:match.inning2,commentary:[...match.commentary]}));
+  // Mark as retired hurt but NOT out — can return
+  inn.batters[batterName].retiredHurt=true;
+  inn.batters[batterName].dismissal='retired hurt';
+  match.ballLog.push({chip:'RH',snap:preSnap});
+  match.commentary.unshift({ov:ovStr(inn.balls),chip:'RH',text:`${batterName} retired hurt. Can return later.`});
+  showToast(`${batterName} retired hurt — can return later`);
+  // Need new batter but wicket NOT added
+  showNewBatterModal();
+  updateUI();
+}
 
 // SHARE SCORECARD
 function shareScorecard(){
@@ -1073,6 +1271,10 @@ function updateUI(){
   document.getElementById('b1n').textContent=match.striker;document.getElementById('b1s').textContent=`${b1.runs} (${b1.balls})`;document.getElementById('b1d').textContent=`4s:${b1.fours||0} 6s:${b1.sixes||0} • SR:${b1.balls>0?((b1.runs/b1.balls)*100).toFixed(1):'0.0'}`;
   document.getElementById('b2n').textContent=match.nonStriker;document.getElementById('b2s').textContent=`${b2.runs} (${b2.balls})`;document.getElementById('b2d').textContent=`4s:${b2.fours||0} 6s:${b2.sixes||0} • SR:${b2.balls>0?((b2.runs/b2.balls)*100).toFixed(1):'0.0'}`;
   document.getElementById('bc1').className='batter-card on-strike';document.getElementById('bc2').className='batter-card';
+  // Show return retired hurt button if any retired hurt batters exist
+  const inn2=curInn();
+  const hasHurt=Object.values(inn2.batters||{}).some(s=>s.retiredHurt&&!s.out);
+  document.getElementById('btn-return-hurt').style.display=hasHurt?'inline-block':'none';
   const bwl=inn.bowlers[match.currentBowler]||{overs:0,runs:0,wickets:0,balls:0};
   document.getElementById('bowl-name').textContent=match.currentBowler;document.getElementById('bowl-stats').textContent=`${bwl.wickets}-${bwl.runs} (${bwl.overs}.${bwl.balls%6})`;
   if(inn.partnerships.length){const p=inn.partnerships[inn.partnerships.length-1];document.getElementById('part-val').textContent=`${p.runs} (${p.balls})`;const mx=Math.max(...inn.partnerships.map(x=>x.runs),1);document.getElementById('part-bar').style.width=`${Math.min(100,(p.runs/mx)*100)}%`;}
