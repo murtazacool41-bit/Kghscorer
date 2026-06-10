@@ -308,6 +308,11 @@ tr:hover td{background:#00ff7f04}
       <div style="margin-top:0.65rem" id="lv-rrbar"></div>
     </div>
 
+      <div style="display:flex;gap:0.4rem;margin-bottom:0.7rem">
+        <button class="share-btn" style="flex:1;text-align:center" onclick="shareLiveLink()">🔗 SHARE LIVE LINK</button>
+        <button class="share-btn" style="flex:1;text-align:center;background:#1a0a30;color:var(--purple);border-color:var(--purple)" onclick="navTo('scorecard')">📋 SCORECARD</button>
+      </div>
+
     <div class="batters-grid">
       <div class="batter-card on-strike" id="bc1" onclick="swapStrike()">
         <div class="batter-name" id="b1n">-</div>
@@ -1230,13 +1235,28 @@ function processDelivery(extType,runs,dismissType,fielder){
     const overRuns=inn.currentOver.filter(b=>!isNaN(parseInt(b))).reduce((a,b)=>a+(parseInt(b)||0),0);
     if(overRuns===0)bwl.maidens++;
     bwl.overs++;inn.currentOver=[];
-    let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;
+    // Rotate strike at end of over ONLY if no wicket fell
+    if(!dismissType){let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;}
     if(match.innings===1&&inn.balls/6>=match.overs){endInnings();return;}
     if(match.innings===2&&checkWin())return;
-    showOverEndModal(inn,bwl);return;
+
+    // IMPORTANT: If wicket fell on last ball — ask for new batter FIRST, then bowler
+    if(dismissType){
+      if(inn.wickets<10){
+        // Show new batter modal, then after batter confirmed show bowler modal
+        pendingOverEnd={inn,bwl};
+        showNewBatterModal();
+      } else {
+        endInnings();
+      }
+      return;
+    }
+
+    showOverEndModal(inn,bwl);
+    return;
   }
 
-  // FIX 1: After wicket, ALWAYS prompt for new batter immediately
+  // After wicket on non-last ball
   if(dismissType){
     if(inn.wickets<10) showNewBatterModal();
     else endInnings();
@@ -1246,7 +1266,9 @@ function processDelivery(extType,runs,dismissType,fielder){
   if(!match.result)updateUI();
 }
 
-// FIX 1: Dedicated new batter modal with clear info
+let pendingOverEnd=null;
+
+// New batter modal
 function showNewBatterModal(){
   const inn=curInn();
   document.getElementById('new-batter-info').textContent=`Wicket ${inn.wickets} fell. ${match.striker} is out. Who comes in next?`;
@@ -1262,6 +1284,15 @@ function setNewBatter(){
   match.striker=n;
   if(inn.partnerships.length){const last=inn.partnerships[inn.partnerships.length-1];if(last.ended)inn.partnerships.push({b1:n,b2:match.nonStriker,runs:0,balls:0});}
   closeModal('modal-new-batter');
+  document.getElementById('new-bat-inp').value='';
+
+  // If wicket fell on last ball of over — now ask for new bowler
+  if(pendingOverEnd){
+    const{inn:pInn,bwl:pBwl}=pendingOverEnd;
+    pendingOverEnd=null;
+    showOverEndModal(pInn,pBwl);
+    return;
+  }
   updateUI();
 }
 
@@ -1510,6 +1541,15 @@ function processRetiredHurt(batterName,type){
   updateUI();
 }
 
+function shareLiveLink(){
+  if(!match){showToast('Start a match first!');return;}
+  const link=getLiveLink(match.id.toString());
+  const txt=`🏏 Watch LIVE — ${match.team1} vs ${match.team2}\n${link}`;
+  if(navigator.share){navigator.share({title:'KGH Live Score',text:txt,url:link});}
+  else if(navigator.clipboard){navigator.clipboard.writeText(link);showToast('🔗 Live link copied!');}
+  else{alert(link);}
+}
+
 // SHARE SCORECARD
 function shareScorecard(){
   const url=window.location.href.split('?')[0];
@@ -1563,7 +1603,7 @@ function renderScorecard(){
   let html='';
   if(m.result){
     const expiry=m.instant?`<span class="expiry-badge expiry-temp">Instant • 7 days</span>`:`<span class="expiry-badge expiry-perm">Permanent</span>`;
-    html=`<div class="result-banner"><div class="result-text">🏆 ${m.result.text||''}</div>${m.result.potm?`<div class="potm-badge">🌟 POTM: ${m.result.potm}</div>`:''}<div style="margin-top:0.5rem">${expiry}</div></div>`;
+    html=`<div class="result-banner"><div class="result-text">🏆 ${m.result.text||''}</div>${m.result.potm?`<div class="potm-badge">🌟 POTM: ${m.result.potm}</div>`:''}<div style="margin-top:0.5rem;font-size:0.8rem;color:var(--muted)">${m.toss&&m.toss.winner?`🪙 ${m.toss.winner} won toss & elected to ${m.toss.elected} • `:''}</div><div style="margin-top:0.3rem">${expiry}</div></div>`;
   }
   [m.inning1,m.inning2].filter(Boolean).forEach((inn,idx)=>{
     const team=idx===0?m.team1:m.team2;
