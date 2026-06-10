@@ -12,6 +12,7 @@
 <meta name="apple-mobile-web-app-title" content="KGH Scorer">
 <link rel="apple-touch-icon" href="icon-192.png">
 <script>if('serviceWorker' in navigator){window.addEventListener('load',()=>{navigator.serviceWorker.register('/sw.js').catch(()=>{});});}</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--green:#00ff7f;--green-dim:#00c45f;--dark:#050f0a;--card:#0a1a10;--card2:#0f2218;--border:#1a3d25;--text:#e0ffe8;--muted:#5a8a6a;--red:#ff4444;--gold:#ffd700;--blue:#00cfff;--purple:#b06fff;--orange:#ff8c00}
 [data-theme="blue"]{--green:#00cfff;--green-dim:#009fcc;--dark:#050a0f;--card:#0a1018;--card2:#0f1a28;--border:#1a2d45;--text:#e0f0ff;--muted:#5a7a9a}
@@ -651,6 +652,188 @@ const INSTANT_EXPIRY_DAYS=7;
 
 function save(k,v){localStorage.setItem(k,JSON.stringify(v));}
 
+// ═══ SUPABASE CLOUD ═══
+const SUPABASE_URL='https://zycqrlsxgqhyeengzgek.supabase.co';
+const SUPABASE_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp5Y3FybHN4Z3FoeWVlbmd6Z2VrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA5OTUyOTMsImV4cCI6MjA5NjU3MTI5M30.GQxAp1e_iKr77RtcdAK83nTlVxtnc6b9FRhtPLtOXOc';
+let sb=null;
+let realtimeSub=null;
+
+function initSupabase(){
+  try{
+    sb=supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+    console.log('✅ Supabase connected');
+  }catch(e){console.warn('Supabase init failed',e);}
+}
+
+// Save match to cloud
+async function cloudSaveMatch(m){
+  if(!sb) return;
+  try{
+    const{error}=await sb.from('matches').upsert({
+      match_id: m.id.toString(),
+      match_data: m,
+      is_live: !m.result,
+      is_instant: m.instant||false,
+      created_by: m.createdBy||'guest',
+      updated_at: new Date().toISOString()
+    },{onConflict:'match_id'});
+    if(error) console.warn('Cloud save error:',error.message);
+    else console.log('☁️ Match saved to cloud');
+  }catch(e){console.warn('Cloud save failed:',e);}
+}
+
+// Load all matches from cloud
+async function cloudLoadMatches(){
+  if(!sb) return;
+  try{
+    const{data,error}=await sb.from('matches')
+      .select('match_data,is_instant,created_at')
+      .order('created_at',{ascending:false})
+      .limit(100);
+    if(error){console.warn('Cloud load error:',error.message);return;}
+    if(!data||!data.length) return;
+    // Merge cloud matches with local — cloud wins for same ID
+    const cloudMatches=data.map(r=>r.match_data).filter(Boolean);
+    const localIds=new Set(matches.map(m=>m.id?.toString()));
+    let added=0;
+    cloudMatches.forEach(cm=>{
+      if(!localIds.has(cm.id?.toString())){
+        matches.push(cm);added++;
+      }
+    });
+    if(added>0){save('kgh-matches',matches);console.log(`☁️ Loaded ${added} matches from cloud`);}
+  }catch(e){console.warn('Cloud load failed:',e);}
+}
+
+// Subscribe to live match updates
+function subscribeToLive(matchId, onUpdate){
+  if(!sb) return;
+  // Unsubscribe from previous
+  if(realtimeSub){sb.removeChannel(realtimeSub);realtimeSub=null;}
+  realtimeSub=sb.channel('live-match-'+matchId)
+    .on('postgres_changes',{
+      event:'UPDATE',schema:'public',table:'matches',
+      filter:`match_id=eq.${matchId}`
+    },(payload)=>{
+      if(payload.new?.match_data) onUpdate(payload.new.match_data);
+    })
+    .subscribe();
+  console.log('📡 Subscribed to live match',matchId);
+}
+
+function unsubscribeLive(){
+  if(realtimeSub&&sb){sb.removeChannel(realtimeSub);realtimeSub=null;}
+}
+
+// Get shareable live link
+function getLiveLink(matchId){
+  return `${window.location.origin}${window.location.pathname}?live=${matchId}`;
+}
+
+// Check if opened as live viewer
+function checkLiveViewMode(){
+  const params=new URLSearchParams(window.location.search);
+  const liveId=params.get('live');
+  if(liveId){
+    // Show live viewer mode
+    showLiveViewer(liveId);
+    return true;
+  }
+  return false;
+}
+
+async function showLiveViewer(matchId){
+  if(!sb){initSupabase();}
+  // Show a simple live viewer page
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('main-app').style.display='none';
+  // Create live viewer div
+  let lv=document.getElementById('live-viewer');
+  if(!lv){
+    lv=document.createElement('div');
+    lv.id='live-viewer';
+    lv.style.cssText='min-height:100vh;background:var(--dark);color:var(--text);padding:1rem;font-family:Rajdhani,sans-serif;max-width:600px;margin:0 auto;';
+    document.body.appendChild(lv);
+  }
+  lv.innerHTML=`<div style="text-align:center;padding:2rem"><div style="font-family:Bebas Neue,sans-serif;font-size:2rem;color:var(--green)">KGH SCORER</div><div style="color:var(--muted);margin-top:0.5rem">Loading live match...</div></div>`;
+
+  // Load match data
+  try{
+    const{data,error}=await sb.from('matches').select('match_data').eq('match_id',matchId).single();
+    if(error||!data){lv.innerHTML=`<div style="text-align:center;padding:3rem;color:var(--red)">Match not found or ended.</div>`;return;}
+    renderLiveViewer(lv,data.match_data);
+    // Subscribe to updates
+    subscribeToLive(matchId,(newData)=>{renderLiveViewer(lv,newData);});
+  }catch(e){lv.innerHTML=`<div style="text-align:center;padding:3rem;color:var(--red)">Error loading match.</div>`;}
+}
+
+function renderLiveViewer(el,m){
+  if(!m){return;}
+  const inn=m.innings===1?m.inning1:m.inning2;
+  const ov=`${Math.floor(inn.balls/6)}.${inn.balls%6}`;
+  const crr=inn.balls>0?((inn.runs/inn.balls)*6).toFixed(2):'0.00';
+  const b1=inn.batters?.[m.striker]||{runs:0,balls:0,fours:0,sixes:0};
+  const b2=inn.batters?.[m.nonStriker]||{runs:0,balls:0};
+  const bwl=inn.bowlers?.[m.currentBowler]||{overs:0,runs:0,wickets:0,balls:0};
+  const isFH=m.isFreeHit||false;
+
+  el.innerHTML=`
+  <div style="text-align:center;margin-bottom:1rem">
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:1.6rem;color:var(--green);letter-spacing:3px">KGH SCORER</div>
+    <div style="display:inline-flex;align-items:center;gap:5px;background:#ff000020;border:1px solid #ff4444;color:#ff4444;font-size:0.72rem;font-weight:700;padding:2px 8px;border-radius:4px;margin-top:0.3rem">
+      <div style="width:6px;height:6px;background:#ff4444;border-radius:50%;animation:blink 1s infinite"></div>LIVE
+    </div>
+  </div>
+
+  ${isFH?`<div style="background:linear-gradient(135deg,#ff8c00,#ffd700);color:#000;font-family:'Bebas Neue',sans-serif;font-size:1.2rem;letter-spacing:3px;text-align:center;padding:0.5rem;border-radius:10px;margin-bottom:1rem">⚡ FREE HIT ⚡</div>`:''}
+
+  <div style="background:#0f2218;border:1px solid #1a3d25;border-radius:14px;padding:1.2rem;text-align:center;margin-bottom:1rem">
+    <div style="font-size:0.85rem;color:#5a8a6a;margin-bottom:4px">${m.innings===1?`${m.team1} vs ${m.team2}`:`${m.team2} chasing ${m.inning1.runs+1}`}</div>
+    <div style="font-family:'Bebas Neue',sans-serif;font-size:4rem;color:#00ff7f;line-height:1">${inn.runs}/${inn.wickets}</div>
+    <div style="font-size:0.9rem;color:#5a8a6a;margin-top:4px">${ov} overs • CRR: ${crr}</div>
+    ${m.innings===2?`<div style="font-size:0.8rem;color:#5a8a6a;margin-top:4px">Need ${m.inning1.runs+1-inn.runs} from ${m.overs*6-inn.balls} balls</div>`:''}
+    <div style="font-size:0.75rem;color:#5a8a6a;margin-top:4px">${m.venue}${m.toss?` • 🪙 ${m.toss.winner} won toss`:''}</div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.7rem;margin-bottom:1rem">
+    <div style="background:#0a1a10;border:2px solid #00ff7f;border-radius:10px;padding:0.8rem">
+      <div style="font-weight:700;font-size:0.9rem">${m.striker} ⚡</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;color:#00ff7f">${b1.runs} (${b1.balls})</div>
+      <div style="font-size:0.7rem;color:#5a8a6a">4s:${b1.fours||0} 6s:${b1.sixes||0}</div>
+    </div>
+    <div style="background:#0a1a10;border:1px solid #1a3d25;border-radius:10px;padding:0.8rem">
+      <div style="font-weight:700;font-size:0.9rem">${m.nonStriker}</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:1.2rem;color:#00ff7f">${b2.runs} (${b2.balls})</div>
+      <div style="font-size:0.7rem;color:#5a8a6a">4s:${b2.fours||0} 6s:${b2.sixes||0}</div>
+    </div>
+  </div>
+
+  <div style="background:#0a1a10;border:1px solid #1a3d25;border-radius:10px;padding:0.8rem;margin-bottom:1rem;display:flex;justify-content:space-between">
+    <div><div style="font-size:0.7rem;color:#5a8a6a">BOWLER</div><div style="font-weight:700">${m.currentBowler}</div></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:#5a8a6a">${bwl.wickets}-${bwl.runs} (${bwl.overs}.${bwl.balls%6})</div>
+  </div>
+
+  <div style="background:#0a1a10;border:1px solid #1a3d25;border-radius:10px;padding:0.8rem;margin-bottom:1rem">
+    <div style="font-size:0.72rem;color:#5a8a6a;margin-bottom:4px">THIS OVER</div>
+    <div>${(inn.currentOver||[]).map(b=>{
+      const colors={W:'#ff4444','4':'#00cfff','6':'#ffd700'};
+      const c=colors[b]||colors[b?.toString()]||'#e0ffe8';
+      return`<span style="display:inline-block;width:26px;height:26px;line-height:26px;text-align:center;border-radius:50%;background:#1a3d25;color:${c};font-size:0.75rem;font-weight:700;margin:2px">${b}</span>`;
+    }).join('')||'<span style="color:#5a8a6a;font-size:0.85rem">New over</span>'}</div>
+  </div>
+
+  ${(m.commentary||[]).slice(0,5).map(c=>`
+    <div style="padding:0.4rem 0;border-bottom:1px solid #1a3d25;font-size:0.82rem">
+      <div style="font-family:'JetBrains Mono',monospace;color:#5a8a6a;font-size:0.7rem">${c.ov||''}</div>
+      <div style="color:${c.chip==='W'?'#ff4444':c.chip==='4'?'#00cfff':c.chip==='6'?'#ffd700':'#e0ffe8'}">${c.text||''}</div>
+    </div>`).join('')}
+
+  <div style="text-align:center;margin-top:1rem;font-size:0.75rem;color:#5a8a6a">
+    Auto-refreshing live • <a href="${window.location.origin}${window.location.pathname}" style="color:#00ff7f">Open Full App</a>
+  </div>`;
+}
+
+
 // ═══ THEME ═══
 function setTheme(t){document.body.setAttribute('data-theme',t);localStorage.setItem('kgh-theme',t);document.querySelectorAll('.theme-dot').forEach(d=>d.classList.remove('active'));const map={'':'t-green','blue':'t-blue','red':'t-red','light':'t-light'};document.querySelector('.'+map[t])?.classList.add('active');}
 setTheme(localStorage.getItem('kgh-theme')||'');
@@ -716,6 +899,8 @@ function doGuest(){
 function launchApp(){
   viewCount++;localStorage.setItem('kgh-views',viewCount);
   cleanExpiredMatches();
+  initSupabase();
+  cloudLoadMatches().then(()=>{renderHome();});
   document.getElementById('login-page').style.display='none';
   document.getElementById('main-app').style.display='block';
   document.getElementById('user-label').textContent=`👤 ${currentUser.name}`;
@@ -1104,12 +1289,13 @@ function declareResult(type){
   else{if(i2&&i1.runs>i2.runs){txt=`${match.team1} WON BY ${i1.runs-i2.runs} RUNS`;match.result={winner:match.team1};}else if(i2&&i1.runs===i2.runs){txt='MATCH TIED';match.result={winner:null};}else{txt=`${match.team1} WON`;match.result={winner:match.team1};}}
   match.result.text=txt;
 
-  // FIX 3/4: Save with expiry info
   const savedMatch=JSON.parse(JSON.stringify(match));
   savedMatch.instant=match.instant||false;
   savedMatch.createdBy=match.createdBy||'guest';
   savedMatch.savedAt=Date.now();
   matches.push(savedMatch);save('kgh-matches',matches);
+  // ☁️ Save to cloud
+  cloudSaveMatch(savedMatch);
 
   // Update account match count
   if(currentUser&&currentUser.email!=='guest'){
@@ -1340,6 +1526,8 @@ function updateUI(){
   document.getElementById('over-chips').innerHTML=inn.currentOver.map(b=>`<span class="ball-chip bc-${b.startsWith('Wd')?'Wd':b.startsWith('Nb')?'Nb':b.startsWith('Lb')?'Lb':b}">${b}</span>`).join('');
   const logEl=document.getElementById('over-log');if(inn.overs.length){logEl.innerHTML=inn.overs.slice(-4).map((ov,i)=>`<span style="color:var(--text)">Ov ${inn.overs.length-Math.min(4,inn.overs.length)+i+1}:</span> ${ov.join(' ')}`).join('<br>');}else logEl.textContent='-';
   if(inn.rrPerOver.length){const bars=inn.rrPerOver;const mx=Math.max(...bars,10);document.getElementById('lv-rrbar').innerHTML=`<div class="rr-graph">${bars.map(r=>`<div class="rr-bar ${r>10?'hi':r>7?'med':''}" style="height:${Math.round((r/mx)*100)}%" title="${r}"></div>`).join('')}</div>`;}
+  // ☁️ Push live match to cloud after every ball
+  if(match&&!match.result) cloudSaveMatch(match);
 }
 
 // SCORECARD
