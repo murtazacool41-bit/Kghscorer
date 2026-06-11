@@ -1477,7 +1477,6 @@ function confirmNextBowler(){
 function sameBowler(){closeModal('modal-over-end');if(match.innings===2&&!match.result)checkWin();updateUI();sbSave(match);}
 
 // ═══ WICKET FLOW ═══
-let wkRuns_=0;let wkRunsSrc='bat';let wkDelType='normal';
 function showWicketModal(){
   document.getElementById('wk-batter').innerHTML=[match.striker,match.nonStriker].map(n=>`<option>${n}</option>`).join('');
   selDismiss_='';wkDelType='normal';wkRuns_=0;wkRunsSrc='bat';
@@ -1549,7 +1548,6 @@ function returnRetiredHurt(){
 }
 
 // ═══ NEW BATTER ═══
-let pendingOverEnd=null;
 function showNewBatterModal(){
   const inn=curInn();
   document.getElementById('new-bat-info').textContent=`Wicket ${inn.wickets} fell. Who comes in next?`;
@@ -1672,7 +1670,7 @@ function renderHome(){
     resEl.innerHTML=comp.slice(-6).reverse().map(m=>`<div class="match-card" onclick="viewMatchCard(${m.id})">
       <div class="match-card-header">
         <div>${m.venue}${m.instant?` <span class="expiry-temp">7d</span>`:' <span class="expiry-perm">✓</span>'}</div>
-        <div style="color:${m.result.winner?'var(--green)':'var(--gold)';font-size:0.75rem}">${m.result.text||''}</div>
+        <div style="color:${m.result.winner?'var(--green)':'var(--gold)'};font-size:0.75rem">${m.result.text||''}</div>
       </div>
       <div class="match-card-body">
         ${m.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${m.toss.winner} won toss & elected to ${m.toss.elected}</div>`:''}
