@@ -371,20 +371,24 @@ tr:hover td{background:var(--green-bg)}
         <div style="background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:0.7rem;margin-bottom:0.9rem">
           <div style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;color:var(--gold);letter-spacing:1px;margin-bottom:0.5rem">🪙 TOSS</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.5rem">
-            <div class="form-group" style="margin-bottom:0"><label>WON BY</label><select id="toss-winner"><option value="">Select</option></select></div>
-            <div class="form-group" style="margin-bottom:0"><label>ELECTED TO</label><select id="toss-elected"><option value="bat">Bat</option><option value="bowl">Bowl</option></select></div>
+            <div class="form-group" style="margin-bottom:0"><label>WON BY</label><select id="toss-winner" onchange="updateOpenerSuggestions()"><option value="">Select</option></select></div>
+            <div class="form-group" style="margin-bottom:0"><label>ELECTED TO</label><select id="toss-elected" onchange="updateOpenerSuggestions()"><option value="bat">Bat</option><option value="bowl">Bowl</option></select></div>
           </div>
+          <div id="toss-result-info" style="font-size:0.75rem;color:var(--green);margin-top:0.5rem;display:none;font-weight:700"></div>
         </div>
-        <!-- Openers -->
-        <div class="form-group" style="margin-bottom:0.5rem"><label>TEAM 1 STRIKER</label>
+        <!-- Openers — auto labels based on toss -->
+        <div class="form-group" style="margin-bottom:0.5rem">
+          <label id="lbl-b1">BATTING TEAM STRIKER</label>
           <input id="s-b1" placeholder="Batter 1">
           <div class="suggest-row" id="sug-b1"></div>
         </div>
-        <div class="form-group" style="margin-bottom:0.5rem"><label>TEAM 1 NON-STRIKER</label>
+        <div class="form-group" style="margin-bottom:0.5rem">
+          <label id="lbl-b2">BATTING TEAM NON-STRIKER</label>
           <input id="s-b2" placeholder="Batter 2">
           <div class="suggest-row" id="sug-b2"></div>
         </div>
-        <div class="form-group"><label>OPENING BOWLER (TEAM 2)</label>
+        <div class="form-group">
+          <label id="lbl-bowl">OPENING BOWLER (FIELDING TEAM)</label>
           <input id="s-bowl" placeholder="Bowler">
           <div class="suggest-row" id="sug-bowl"></div>
         </div>
@@ -1030,13 +1034,39 @@ function updateTossOpts(){
 }
 function updateOpenerSuggestions(){
   const[t1,t2]=getTeamNames();
-  const t1obj=teams.find(t=>t.name===t1);
-  const t2obj=teams.find(t=>t.name===t2);
-  const t1players=t1obj?.players||[];
-  const t2players=t2obj?.players||[];
-  renderSugRow('sug-b1',t1players,(v)=>{document.getElementById('s-b1').value=v;});
-  renderSugRow('sug-b2',t1players,(v)=>{document.getElementById('s-b2').value=v;});
-  renderSugRow('sug-bowl',t2players,(v)=>{document.getElementById('s-bowl').value=v;});
+  const tossWinner=document.getElementById('toss-winner').value;
+  const tossElected=document.getElementById('toss-elected').value;
+
+  // Determine who bats and who bowls based on toss
+  let battingTeam='', bowlingTeam='';
+  if(tossWinner){
+    if(tossElected==='bat'){battingTeam=tossWinner;bowlingTeam=tossWinner===t1?t2:t1;}
+    else{bowlingTeam=tossWinner;battingTeam=tossWinner===t1?t2:t1;}
+  } else {
+    battingTeam=t1;bowlingTeam=t2;
+  }
+
+  // Show toss result info
+  const infoEl=document.getElementById('toss-result-info');
+  if(tossWinner&&battingTeam){
+    infoEl.style.display='block';
+    infoEl.textContent=`✅ ${battingTeam} will BAT first • ${bowlingTeam} will BOWL`;
+  } else infoEl.style.display='none';
+
+  // Update labels
+  document.getElementById('lbl-b1').textContent=battingTeam?`${battingTeam.toUpperCase()} STRIKER`:'BATTING TEAM STRIKER';
+  document.getElementById('lbl-b2').textContent=battingTeam?`${battingTeam.toUpperCase()} NON-STRIKER`:'BATTING TEAM NON-STRIKER';
+  document.getElementById('lbl-bowl').textContent=bowlingTeam?`OPENING BOWLER (${bowlingTeam.toUpperCase()})`:'OPENING BOWLER (FIELDING TEAM)';
+
+  // Get player lists from registered teams
+  const batObj=teams.find(t=>t.name===battingTeam);
+  const bowlObj=teams.find(t=>t.name===bowlingTeam);
+  const batPlayers=batObj?.players||[];
+  const bowlPlayers=bowlObj?.players||[];
+
+  renderSugRow('sug-b1',batPlayers,(v)=>{document.getElementById('s-b1').value=v;});
+  renderSugRow('sug-b2',batPlayers,(v)=>{document.getElementById('s-b2').value=v;});
+  renderSugRow('sug-bowl',bowlPlayers,(v)=>{document.getElementById('s-bowl').value=v;});
 }
 function renderSugRow(elId,names,onClick){
   const el=document.getElementById(elId);if(!el)return;
@@ -1232,12 +1262,20 @@ function startMatch(){
   else{t1=document.getElementById('st1').value;t2=document.getElementById('st2').value;if(!t1||!t2)return alert('Select both teams');if(t1===t2)return alert('Select different teams');}
   const overs=parseInt(document.getElementById('s-overs').value);
   const venue=document.getElementById('s-venue').value||'KGH Ground';
+  const tossWin=document.getElementById('toss-winner').value||t1;
+  const tossEl=document.getElementById('toss-elected').value||'bat';
+
+  // Determine batting team from toss
+  let battingFirst=t1,bowlingFirst=t2;
+  if(tossWin){
+    if(tossEl==='bat'){battingFirst=tossWin;bowlingFirst=tossWin===t1?t2:t1;}
+    else{bowlingFirst=tossWin;battingFirst=tossWin===t1?t2:t1;}
+  }
+
   const b1=document.getElementById('s-b1').value.trim()||'Batter 1';
   const b2=document.getElementById('s-b2').value.trim()||'Batter 2';
   const bwl=document.getElementById('s-bowl').value.trim()||'Bowler 1';
-  const tossWin=document.getElementById('toss-winner').value||t1;
-  const tossEl=document.getElementById('toss-elected').value||'bat';
-  match={id:Date.now(),team1:t1,team2:t2,venue,overs,innings:1,result:null,
+  match={id:Date.now(),team1:battingFirst,team2:bowlingFirst,venue,overs,innings:1,result:null,
     inning1:newInn(),inning2:null,striker:b1,nonStriker:b2,currentBowler:bwl,
     commentary:[],ballLog:[],instant,createdBy:currentUser?.email||'guest',
     toss:{winner:tossWin,elected:tossEl}};
@@ -1646,28 +1684,61 @@ function renderScorecard(){
 }
 
 // ═══ HOME ═══
-function renderHome(){
+async function renderHome(){
   const liveEl=document.getElementById('home-live');
   const resEl=document.getElementById('home-results');
+
+  // Load all matches from cloud for public feed
+  if(sb){
+    try{
+      const{data}=await sb.from('matches').select('match_data').order('updated_at',{ascending:false}).limit(50);
+      if(data){
+        const cloud=data.map(r=>r.match_data).filter(Boolean);
+        const ids=new Set(matches.map(m=>m.id?.toString()));
+        cloud.forEach(cm=>{if(!ids.has(cm.id?.toString()))matches.push(cm);});
+      }
+    }catch(e){}
+  }
+
+  const allLive=matches.filter(m=>!m.result);
   const comp=matches.filter(m=>m.result);
-  // Live
+
+  // LIVE section
+  let liveHTML='';
   if(match&&!match.result){
     const inn=curInn();const battingTeam=match.innings===1?match.team1:match.team2;
-    liveEl.innerHTML=`<div class="match-card" onclick="showTab('score')">
-      <div class="match-card-header"><div class="live-badge"><div class="live-dot"></div>LIVE</div><div>${match.venue}</div></div>
+    liveHTML+=`<div class="match-card" onclick="showTab('score')">
+      <div class="match-card-header"><div class="live-badge"><div class="live-dot"></div>LIVE • YOU</div><div>${match.venue}</div></div>
       <div class="match-card-body">
         <div style="margin-bottom:0.3rem"><span class="batting-team-badge" style="font-size:0.72rem;padding:2px 8px">${battingTeam} BATTING</span></div>
-        ${match.toss?.winner?`<div style="font-size:0.72rem;color:var(--muted);margin-bottom:0.4rem">🪙 ${match.toss.winner} won toss</div>`:''}
+        ${match.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${match.toss.winner} won toss & elected to ${match.toss.elected}</div>`:''}
         <div class="match-team-row"><div class="match-team-name">${match.team1}</div><div><div class="match-team-score">${match.inning1.runs}/${match.inning1.wickets}</div><div class="ov-sm">${match.innings===1?ovStr(inn.balls):ovStr(match.inning1.balls)} ov</div></div></div>
-        <div class="match-team-row"><div class="match-team-name">${match.team2}</div><div>${match.innings===2?`<div class="match-team-score">${inn.runs}/${inn.wickets}</div><div style="font-size:0.73rem;color:var(--muted);text-align:right">${ovStr(inn.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
+        <div class="match-team-row"><div class="match-team-name">${match.team2}</div><div>${match.innings===2?`<div class="match-team-score">${inn.runs}/${inn.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(inn.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
       </div>
     </div>`;
-  } else {
-    liveEl.innerHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem;text-align:center;margin-bottom:0.8rem"><div style="font-size:0.9rem;color:var(--muted)">No live match</div><div style="font-size:0.8rem;color:var(--muted);margin-top:0.3rem">Tap <b style="color:var(--green)">SCORE</b> tab to start one</div></div>`;
   }
-  // Recent results
+  // Other live matches from cloud
+  const otherLive=allLive.filter(m=>m.id!==match?.id);
+  otherLive.slice(0,5).forEach(m=>{
+    const inn=m.innings===2&&m.inning2?m.inning2:m.inning1;
+    const battingTeam=m.innings===1?m.team1:m.team2;
+    liveHTML+=`<div class="match-card" onclick="window.open('${getLiveLink(m.id.toString())}','_blank')">
+      <div class="match-card-header"><div class="live-badge"><div class="live-dot"></div>LIVE</div><div>${m.venue}</div></div>
+      <div class="match-card-body">
+        <div style="margin-bottom:0.3rem"><span class="batting-team-badge" style="font-size:0.72rem;padding:2px 8px">${battingTeam} BATTING</span></div>
+        ${m.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${m.toss.winner} won toss</div>`:''}
+        <div class="match-team-row"><div class="match-team-name">${m.team1}</div><div><div class="match-team-score">${m.inning1.runs}/${m.inning1.wickets}</div></div></div>
+        <div class="match-team-row"><div class="match-team-name">${m.team2}</div><div>${m.inning2?`<div class="match-team-score">${m.inning2.runs}/${m.inning2.wickets}</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
+        <div style="font-size:0.72rem;color:var(--blue);margin-top:0.3rem">👁 Tap to watch live</div>
+      </div>
+    </div>`;
+  });
+  if(!liveHTML) liveHTML=`<div style="background:var(--card);border:1px solid var(--border);border-radius:12px;padding:1.1rem;text-align:center;margin-bottom:0.8rem"><div style="font-size:0.9rem;color:var(--muted)">No live matches right now</div><div style="font-size:0.8rem;color:var(--muted);margin-top:0.3rem">Tap <b style="color:var(--green)">SCORE</b> tab to start one</div></div>`;
+  liveEl.innerHTML=liveHTML;
+
+  // ALL past results — everyone sees them
   if(comp.length){
-    resEl.innerHTML=comp.slice(-6).reverse().map(m=>`<div class="match-card" onclick="viewMatchCard(${m.id})">
+    resEl.innerHTML=comp.slice(-10).reverse().map(m=>`<div class="match-card" onclick="viewMatchCard(${m.id})">
       <div class="match-card-header">
         <div>${m.venue}${m.instant?` <span class="expiry-temp">7d</span>`:' <span class="expiry-perm">✓</span>'}</div>
         <div style="color:${m.result.winner?'var(--green)':'var(--gold)'};font-size:0.75rem">${m.result.text||''}</div>
