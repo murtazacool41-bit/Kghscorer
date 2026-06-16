@@ -1052,7 +1052,24 @@ function showTab(id){
   if(id==='admin')initAdmin();
 }
 
-// ═══ TEAMS ═══
+// ═══ AUTO TEAM LOGO ═══
+function getTeamLogo(name,size=36){
+  const colors=[
+    ['#00ff7f','#050f0a'],['#38bdf8','#020b14'],['#f87171','#140303'],
+    ['#a78bfa','#0a0514'],['#fb923c','#0f0800'],['#fbbf24','#0f0a00'],
+    ['#4ade80','#020f04'],['#f472b6','#14040e'],['#2dd4bf','#01100f'],
+    ['#818cf8','#030414'],['#e879f9','#140014'],['#34d399','#01100a']
+  ];
+  const idx=name.split('').reduce((a,c)=>a+c.charCodeAt(0),0)%colors.length;
+  const[fg,bg]=colors[idx];
+  const initials=name.split(' ').map(w=>w[0]?.toUpperCase()||'').join('').slice(0,2)||name.slice(0,2).toUpperCase();
+  return`<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" xmlns="http://www.w3.org/2000/svg">
+    <rect width="${size}" height="${size}" rx="${size*0.25}" fill="${bg}"/>
+    <rect width="${size}" height="${size}" rx="${size*0.25}" fill="${fg}" fill-opacity="0.15"/>
+    <rect x="1" y="1" width="${size-2}" height="${size-2}" rx="${size*0.22}" fill="none" stroke="${fg}" stroke-width="1.5" stroke-opacity="0.6"/>
+    <text x="${size/2}" y="${size*0.65}" text-anchor="middle" font-family="'Bebas Neue',sans-serif" font-size="${size*0.38}" fill="${fg}" letter-spacing="1">${initials}</text>
+  </svg>`;
+}
 function populateTeamDropdowns(){
   ['st1','st2'].forEach(id=>{const s=document.getElementById(id),v=s.value;s.innerHTML='<option value="">Select</option>'+teams.map(t=>`<option value="${t.name}">${t.name}</option>`).join('');s.value=v;});
   updateTossOpts();updateOpenerSuggestions();
@@ -1163,6 +1180,7 @@ function renderTeams(){
     const tm=matches.filter(m=>m.team1===t.name||m.team2===t.name);
     const w=tm.filter(m=>m.result?.winner===t.name).length;
     return`<div class="list-item">
+      <div style="flex-shrink:0">${getTeamLogo(t.name,44)}</div>
       <div class="list-item-body">
         <div class="list-item-name">${t.name}</div>
         <div class="list-item-sub">${t.ground||'No ground'} • ${t.players.length} players</div>
@@ -1274,6 +1292,8 @@ function toggleTnTeam(btn){
   const count=document.querySelectorAll('#tn-team-picker .team-pick-btn.picked').length;
   document.getElementById('tn-sel-count').textContent=count;
 }
+
+function saveTournament(){
   const name=document.getElementById('tn-name').value.trim();if(!name)return alert('Enter name');
   const format=document.getElementById('tn-fmt').value;
   const overs=parseInt(document.getElementById('tn-overs').value)||20;
