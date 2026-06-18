@@ -374,9 +374,14 @@ tr:hover td{background:var(--green-bg)}
       <div class="section-title">NEW <span>MATCH</span></div>
       <div class="card">
         <!-- Instant toggle -->
-        <div style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.9rem;padding:0.65rem;background:var(--card2);border-radius:10px;border:1px solid var(--border)">
-          <div><div style="font-weight:700;font-size:0.9rem">⚡ Instant Match</div><div style="font-size:0.72rem;color:var(--muted)">No registration needed • Saves 7 days</div></div>
-          <label style="margin-left:auto;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:0.4rem"><input type="checkbox" id="instant-tog" onchange="toggleInstant()" style="width:auto;accent-color:var(--green)"> ON</label>
+        <div id="instant-toggle-bar" style="display:flex;align-items:center;gap:0.8rem;margin-bottom:0.9rem;padding:0.65rem;background:var(--card2);border-radius:10px;border:1.5px solid var(--border);transition:all 0.2s" onclick="document.getElementById('instant-tog').click()">
+          <div style="font-size:1.3rem">⚡</div>
+          <div style="flex:1">
+            <div style="font-weight:700;font-size:0.9rem">Instant Match</div>
+            <div style="font-size:0.72rem;color:var(--muted)">No team registration needed • Saves 7 days</div>
+          </div>
+          <div id="instant-tog-display" style="background:var(--card3);border:1.5px solid var(--border);border-radius:20px;padding:3px 12px;font-family:'Bebas Neue',sans-serif;font-size:0.85rem;letter-spacing:1px;color:var(--muted);transition:all 0.2s">OFF</div>
+          <input type="checkbox" id="instant-tog" onchange="toggleInstant()" style="display:none">
         </div>
         <div id="reg-teams-section">
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:0.65rem">
@@ -1079,6 +1084,24 @@ function toggleInstant(){
   const on=document.getElementById('instant-tog').checked;
   document.getElementById('reg-teams-section').style.display=on?'none':'block';
   document.getElementById('instant-teams-section').style.display=on?'block':'none';
+  // Visual feedback
+  const bar=document.getElementById('instant-toggle-bar');
+  const disp=document.getElementById('instant-tog-display');
+  if(on){
+    bar.style.borderColor='var(--green)';
+    bar.style.background='var(--green-bg)';
+    disp.style.background='var(--green)';
+    disp.style.color='#050f0a';
+    disp.style.borderColor='var(--green)';
+    disp.textContent='ON';
+  } else {
+    bar.style.borderColor='var(--border)';
+    bar.style.background='var(--card2)';
+    disp.style.background='var(--card3)';
+    disp.style.color='var(--muted)';
+    disp.style.borderColor='var(--border)';
+    disp.textContent='OFF';
+  }
   updateTossOpts();updateOpenerSuggestions();
 }
 function getTeamNames(){
@@ -1772,8 +1795,17 @@ function showOverEndModal(inn,bwl){
   const overNum=inn.overs.length;const ov=inn.overs[overNum-1]||[];
   const ovRuns=ov.filter(b=>!isNaN(parseInt(b))).reduce((a,b)=>a+(parseInt(b)||0),0);
   document.getElementById('over-end-info').innerHTML=`<b>Over ${overNum} complete</b><br>Bowler: <b>${match.currentBowler}</b> — ${bwl.wickets}/${bwl.runs}<br>Over: ${ov.join(' ')} (${ovRuns} runs)`;
-  const sug=Object.keys(inn.bowlers).filter(b=>b!==match.currentBowler);
-  document.getElementById('sug-next-bowl').innerHTML=sug.map(n=>`<button class="suggest-pill" onclick="document.getElementById('next-bowl-inp').value='${n.replace(/'/g,"\\'")}'"> ${n}</button>`).join('');
+
+  // Suggest bowlers: previous bowlers + fielding team players (excluding current bowler)
+  const fieldingTeam=match.innings===1?match.team2:match.team1;
+  const fieldingTeamObj=teams.find(t=>t.name===fieldingTeam);
+  const teamPlayers=fieldingTeamObj?.players||[];
+  const prevBowlers=Object.keys(inn.bowlers).filter(b=>b!==match.currentBowler);
+
+  // Merge: prev bowlers first, then remaining team players not yet suggested
+  const allSuggestions=[...new Set([...prevBowlers,...teamPlayers.filter(p=>p!==match.currentBowler)])];
+
+  document.getElementById('sug-next-bowl').innerHTML=allSuggestions.map(n=>`<button class="suggest-pill" onclick="document.getElementById('next-bowl-inp').value='${n.replace(/'/g,"\\'")}'"> ${n}</button>`).join('');
   document.getElementById('next-bowl-inp').value='';
   openModal('modal-over-end');
 }
@@ -1869,7 +1901,13 @@ function showNewBatterModal(){
   openModal('modal-new-batter');
 }
 function confirmNewBatter(){
-  const n=document.getElementById('new-bat-inp').value.trim();if(!n){alert('Enter batter name');return;}
+  const n=document.getElementById('new-bat-inp').value.trim();
+  if(!n){alert('Enter batter name');return;}
+  // Prevent same batter as non-striker
+  if(n===match.nonStriker){
+    showToast(`${n} is already at non-striker end!`);
+    document.getElementById('new-bat-inp').value='';return;
+  }
   const inn=curInn();initBat(inn,n);match.striker=n;
   if(inn.partnerships.length){const last=inn.partnerships[inn.partnerships.length-1];if(last.ended)inn.partnerships.push({b1:n,b2:match.nonStriker,runs:0,balls:0});}
   closeModal('modal-new-batter');document.getElementById('new-bat-inp').value='';
