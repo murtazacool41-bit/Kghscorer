@@ -793,7 +793,10 @@ tr:hover td{background:var(--green-bg)}
   <div class="modal-title">🏏 NEW BATTER</div>
   <div id="new-bat-info" style="background:var(--card2);border-radius:8px;padding:0.6rem;margin-bottom:0.8rem;font-size:0.85rem;color:var(--muted)"></div>
   <div class="form-group"><label>NEXT BATTER</label>
-    <input id="new-bat-inp" placeholder="Batter name" onkeydown="if(event.key==='Enter')confirmNewBatter()">
+    <input id="new-bat-inp" placeholder="Batter name"
+      oninput="if(match&&this.value.trim()===match.nonStriker){document.getElementById('new-bat-warn').style.display='block';}else{document.getElementById('new-bat-warn').style.display='none';}"
+      onkeydown="if(event.key==='Enter')confirmNewBatter()">
+    <div id="new-bat-warn" style="display:none;color:var(--red);font-size:0.75rem;margin-top:3px">⚠️ This player is already at non-striker end!</div>
     <div class="suggest-row" id="sug-new-bat"></div>
   </div>
   <div class="modal-actions"><button class="btn-primary" onclick="confirmNewBatter()">COME IN TO BAT</button></div>
@@ -1148,8 +1151,16 @@ function updateOpenerSuggestions(){
   const batPlayers=batObj?.players||[];
   const bowlPlayers=bowlObj?.players||[];
 
-  renderSugRow('sug-b1',batPlayers,(v)=>{document.getElementById('s-b1').value=v;});
-  renderSugRow('sug-b2',batPlayers,(v)=>{document.getElementById('s-b2').value=v;});
+  renderSugRow('sug-b1',batPlayers,(v)=>{
+    const b2=document.getElementById('s-b2').value.trim();
+    if(v===b2){showToast(`${v} already selected as non-striker!`);return;}
+    document.getElementById('s-b1').value=v;
+  });
+  renderSugRow('sug-b2',batPlayers,(v)=>{
+    const b1=document.getElementById('s-b1').value.trim();
+    if(v===b1){showToast(`${v} already selected as striker!`);return;}
+    document.getElementById('s-b2').value=v;
+  });
   renderSugRow('sug-bowl',bowlPlayers,(v)=>{document.getElementById('s-bowl').value=v;});
 }
 function renderSugRow(elId,names,onClick){
@@ -1547,6 +1558,10 @@ function startMatch(){
   const b2=document.getElementById('s-b2').value.trim()||'Batter 2';
   const bwl=document.getElementById('s-bowl').value.trim()||'Bowler 1';
 
+  // Prevent same batter twice
+  if(b1===b2){alert('Striker and Non-striker cannot be the same player!');return;}
+  if(bwl===b1||bwl===b2){alert('Bowler cannot be the same as a batter!');return;}
+
   match={
     id:Date.now(),team1:battingFirst,team2:bowlingFirst,venue,overs,
     innings:1,result:null,inning1:newInn(),inning2:null,
@@ -1890,14 +1905,17 @@ function returnRetiredHurt(){
 // ═══ NEW BATTER ═══
 function showNewBatterModal(){
   const inn=curInn();
-  document.getElementById('new-bat-info').textContent=`Wicket ${inn.wickets} fell. Who comes in next?`;
+  document.getElementById('new-bat-info').textContent=`Wicket ${inn.wickets} fell. Who comes in next? (${match.nonStriker} is at non-striker end)`;
   document.getElementById('new-bat-inp').value='';
-  // Suggestions from batting team
+  // Suggestions from batting team — exclude already batting players AND non-striker
   const battingTeam=match.innings===1?match.team1:match.team2;
   const tobj=teams.find(t=>t.name===battingTeam);
-  const battedNames=Object.keys(inn.batters||{});
-  const remaining=(tobj?.players||[]).filter(p=>!battedNames.includes(p));
-  renderSugRow('sug-new-bat',remaining,(v)=>{document.getElementById('new-bat-inp').value=v;});
+  const battedNames=new Set([...Object.keys(inn.batters||{}), match.nonStriker]);
+  const remaining=(tobj?.players||[]).filter(p=>!battedNames.has(p));
+  renderSugRow('sug-new-bat',remaining,(v)=>{
+    if(v===match.nonStriker){showToast(`${v} is already at non-striker!`);return;}
+    document.getElementById('new-bat-inp').value=v;
+  });
   openModal('modal-new-batter');
 }
 function confirmNewBatter(){
