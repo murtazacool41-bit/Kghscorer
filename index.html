@@ -449,7 +449,11 @@ tr:hover td{background:var(--green-bg)}
           <div class="live-badge"><div class="live-dot"></div>LIVE</div>
           <div style="font-size:0.75rem;color:var(--muted)" id="lv-venue"></div>
         </div>
-        <div style="font-size:0.82rem;color:var(--text2);margin-bottom:2px" id="lv-teams"></div>
+        <div style="font-size:0.82rem;color:var(--text2);margin-bottom:2px;display:flex;align-items:center;gap:0.4rem" id="lv-teams">
+        <span id="lv-t1-logo"></span>
+        <span id="lv-teams-text"></span>
+        <span id="lv-t2-logo"></span>
+      </div>
         <div class="batting-team-badge" id="lv-batting-badge"></div>
         <div class="big-score" id="lv-score">0/0</div>
         <div class="big-meta" id="lv-overs">0.0 overs • CRR: 0.00</div>
@@ -1940,7 +1944,9 @@ function updateUI(){
   const battingTeam=match.innings===1?match.team1:match.team2;
   document.getElementById('lv-score').textContent=`${inn.runs}/${inn.wickets}`;
   document.getElementById('lv-overs').textContent=`${ov} overs • CRR: ${crr}`;
-  document.getElementById('lv-teams').textContent=`${match.team1} vs ${match.team2}`;
+  document.getElementById('lv-teams-text').textContent=`${match.team1} vs ${match.team2}`;
+  document.getElementById('lv-t1-logo').innerHTML=getTeamLogo(match.team1,22);
+  document.getElementById('lv-t2-logo').innerHTML=getTeamLogo(match.team2,22);
   document.getElementById('lv-venue').textContent=match.venue;
   document.getElementById('lv-batting-badge').textContent=`${battingTeam} BATTING`;
   document.getElementById('lv-toss-info').textContent=match.toss?.winner?`🪙 ${match.toss.winner} won toss & elected to ${match.toss.elected}`:'';
@@ -1984,8 +1990,9 @@ function renderScorecard(){
     const team=idx===0?m.team1:m.team2;
     const xb=inn.extrasBreakdown;
     html+=`<div class="card">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.75rem">
-        <div>
+      <div style="display:flex;align-items:center;gap:0.6rem;margin-bottom:0.75rem">
+        <div>${getTeamLogo(team,40)}</div>
+        <div style="flex:1">
           <div class="card-title" style="margin-bottom:0">${team}</div>
           ${idx===(m.innings===1?0:1)&&!m.result?`<div class="batting-team-badge" style="font-size:0.75rem;padding:2px 8px">BATTING</div>`:''}
         </div>
@@ -2038,8 +2045,8 @@ async function renderHome(){
       <div class="match-card-body">
         <div style="margin-bottom:0.3rem"><span class="batting-team-badge" style="font-size:0.72rem;padding:2px 8px">${battingTeam} BATTING</span></div>
         ${match.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${match.toss.winner} won toss & elected to ${match.toss.elected}</div>`:''}
-        <div class="match-team-row"><div class="match-team-name">${match.team1}</div><div><div class="match-team-score">${match.inning1.runs}/${match.inning1.wickets}</div><div class="ov-sm">${match.innings===1?ovStr(inn.balls):ovStr(match.inning1.balls)} ov</div></div></div>
-        <div class="match-team-row"><div class="match-team-name">${match.team2}</div><div>${match.innings===2?`<div class="match-team-score">${inn.runs}/${inn.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(inn.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
+        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem"><div>${getTeamLogo(m.team1,28)}</div><div class="match-team-name">${m.team1}</div></div><div><div class="match-team-score">${m.inning1.runs}/${m.inning1.wickets}</div><div class="ov-sm">${match.innings===1?ovStr(inn.balls):ovStr(match.inning1.balls)} ov</div></div></div>
+        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem"><div>${getTeamLogo(match.team2,28)}</div><div class="match-team-name">${match.team2}</div></div><div>${match.innings===2?`<div class="match-team-score">${inn.runs}/${inn.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(inn.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
       </div>
     </div>`;
   }
@@ -2071,8 +2078,8 @@ async function renderHome(){
       </div>
       <div class="match-card-body">
         ${m.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${m.toss.winner} won toss & elected to ${m.toss.elected}</div>`:''}
-        <div class="match-team-row"><div class="match-team-name">${m.team1}</div><div><div class="match-team-score done">${m.inning1.runs}/${m.inning1.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(m.inning1.balls)} ov</div></div></div>
-        <div class="match-team-row"><div class="match-team-name">${m.team2}</div><div>${m.inning2?`<div class="match-team-score done">${m.inning2.runs}/${m.inning2.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(m.inning2.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.82rem">DNB</div>`}</div></div>
+        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem">${getTeamLogo(m.team1,28)}<div class="match-team-name">${m.team1}</div></div><div><div class="match-team-score done">${m.inning1.runs}/${m.inning1.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(m.inning1.balls)} ov</div></div></div>
+        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem">${getTeamLogo(m.team2,28)}<div class="match-team-name">${m.team2}</div></div><div>${m.inning2?`<div class="match-team-score done">${m.inning2.runs}/${m.inning2.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(m.inning2.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.82rem">DNB</div>`}</div></div>
         ${m.result.potm?`<div style="margin-top:0.3rem"><span class="potm-badge" style="font-size:0.72rem">🌟 ${m.result.potm}</span></div>`:''}
       </div>
     </div>`).join('');
