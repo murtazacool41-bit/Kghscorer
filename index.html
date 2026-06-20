@@ -658,7 +658,6 @@ tr:hover td{background:var(--green-bg)}
 <div class="modal-overlay" id="modal-team"><div class="modal">
   <div class="modal-title" id="team-modal-title">ADD TEAM</div>
   <div class="form-group"><label>TEAM NAME</label><input id="tm-name" placeholder="KGH Warriors"></div>
-  <div class="form-group"><label>HOME GROUND</label><input id="tm-ground" placeholder="KGH Ground"></div>
   <div class="form-group">
     <label>SELECT PLAYERS</label>
     <input id="tm-search" placeholder="🔍 Search players..." oninput="renderPlayerPicker()" style="margin-bottom:0.4rem">
@@ -1175,9 +1174,9 @@ function renderSugRow(elId,names,onClick){
 function openTeamModal(teamId=null){
   editingTeamId=teamId;tmSelPlayers=[];
   document.getElementById('team-modal-title').textContent=teamId?'EDIT TEAM':'ADD TEAM';
-  document.getElementById('tm-name').value='';document.getElementById('tm-ground').value='';
+  document.getElementById('tm-name').value='';
   document.getElementById('tm-search').value='';document.getElementById('tm-new-pl').value='';
-  if(teamId){const t=teams.find(t=>t.id===teamId);if(t){document.getElementById('tm-name').value=t.name;document.getElementById('tm-ground').value=t.ground||'';tmSelPlayers=[...t.players];}}
+  if(teamId){const t=teams.find(t=>t.id===teamId);if(t){document.getElementById('tm-name').value=t.name;tmSelPlayers=[...t.players];}}
   renderPlayerPicker();renderSelectedChips();openModal('modal-team');
 }
 function renderPlayerPicker(){
@@ -1207,8 +1206,8 @@ function addPlayerFromTeam(){
 }
 function saveTeam(){
   const name=document.getElementById('tm-name').value.trim();if(!name)return alert('Enter team name');
-  if(editingTeamId){const t=teams.find(t=>t.id===editingTeamId);if(t){t.name=name;t.ground=document.getElementById('tm-ground').value.trim();t.players=[...tmSelPlayers];}}
-  else teams.push({id:Date.now(),name,ground:document.getElementById('tm-ground').value.trim(),players:[...tmSelPlayers]});
+  if(editingTeamId){const t=teams.find(t=>t.id===editingTeamId);if(t){t.name=name;t.players=[...tmSelPlayers];}}
+  else teams.push({id:Date.now(),name,players:[...tmSelPlayers]});
   save('kgh-teams',teams);closeModal('modal-team');editingTeamId=null;tmSelPlayers=[];renderTeams();populateTeamDropdowns();
 }
 function renderTeams(){
@@ -1221,7 +1220,7 @@ function renderTeams(){
       <div style="flex-shrink:0">${getTeamLogo(t.name,44)}</div>
       <div class="list-item-body">
         <div class="list-item-name">${t.name}</div>
-        <div class="list-item-sub">${t.ground||'No ground'} • ${t.players.length} players</div>
+        <div class="list-item-sub">${t.players.length} players</div>
         <div class="player-scroll">${t.players.map(p=>`<span class="player-chip">${p}</span>`).join('')}</div>
         <div style="font-size:0.72rem;margin-top:4px"><span style="color:var(--green)">${w}W</span> <span style="color:var(--red)">${tm.length-w}L</span> in ${tm.length}</div>
       </div>
@@ -2045,7 +2044,7 @@ async function renderHome(){
       <div class="match-card-body">
         <div style="margin-bottom:0.3rem"><span class="batting-team-badge" style="font-size:0.72rem;padding:2px 8px">${battingTeam} BATTING</span></div>
         ${match.toss?.winner?`<div style="font-size:0.7rem;color:var(--muted);margin-bottom:0.3rem">🪙 ${match.toss.winner} won toss & elected to ${match.toss.elected}</div>`:''}
-        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem"><div>${getTeamLogo(m.team1,28)}</div><div class="match-team-name">${m.team1}</div></div><div><div class="match-team-score">${m.inning1.runs}/${m.inning1.wickets}</div><div class="ov-sm">${match.innings===1?ovStr(inn.balls):ovStr(match.inning1.balls)} ov</div></div></div>
+        <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem"><div>${getTeamLogo(match.team1,28)}</div><div class="match-team-name">${match.team1}</div></div><div><div class="match-team-score">${match.inning1.runs}/${match.inning1.wickets}</div><div class="ov-sm">${match.innings===1?ovStr(inn.balls):ovStr(match.inning1.balls)} ov</div></div></div>
         <div class="match-team-row"><div style="display:flex;align-items:center;gap:0.5rem"><div>${getTeamLogo(match.team2,28)}</div><div class="match-team-name">${match.team2}</div></div><div>${match.innings===2?`<div class="match-team-score">${inn.runs}/${inn.wickets}</div><div style="font-size:0.72rem;color:var(--muted);text-align:right">${ovStr(inn.balls)} ov</div>`:`<div style="color:var(--muted);font-size:0.85rem">Yet to bat</div>`}</div></div>
       </div>
     </div>`;
