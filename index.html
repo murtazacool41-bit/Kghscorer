@@ -440,6 +440,7 @@ tr:hover td{background:var(--green-bg)}
         <button class="btn-secondary btn-sm" onclick="showTab('scorecard')">📋 Scorecard</button>
         <button id="end-inn-btn" class="btn-danger btn-sm" onclick="endInnings()">End Innings</button>
         <button id="btn-return-hurt" class="btn-sm" style="display:none;background:#332000;color:var(--gold);border:1px solid var(--gold);border-radius:10px;cursor:pointer;font-family:'Bebas Neue',sans-serif" onclick="returnRetiredHurt()">↩ Ret. Hurt</button>
+        <button class="btn-sm" style="background:#001833;color:#60aaff;border:1px solid #60aaff;border-radius:10px;cursor:pointer;font-family:'Bebas Neue',sans-serif" onclick="openMidBowlerChange()">🚑 Inj. Bowler</button>
       </div>
 
       <!-- Score box -->
@@ -787,7 +788,18 @@ tr:hover td{background:var(--green-bg)}
   <div class="suggest-row" id="sug-next-bowl" style="margin-bottom:0.7rem"></div>
   <div class="modal-actions">
     <button class="btn-primary" onclick="confirmNextBowler()">START NEXT OVER</button>
-    <button class="btn-secondary" onclick="sameBowler()">Same Bowler</button>
+  </div>
+</div></div>
+
+<!-- MID-OVER BOWLER CHANGE MODAL -->
+<div class="modal-overlay" id="modal-mid-bowl"><div class="modal">
+  <div class="modal-title">🚑 BOWLER CHANGE</div>
+  <div style="background:var(--card2);border-radius:8px;padding:0.6rem;margin-bottom:0.8rem;font-size:0.83rem;color:var(--muted)">Injury/illness mid-over — select replacement to complete this over.</div>
+  <div class="form-group"><label>REPLACEMENT BOWLER</label><input id="mid-bowl-inp" placeholder="Bowler name" oninput="filterMidBowlSug()"></div>
+  <div class="suggest-row" id="sug-mid-bowl" style="margin-bottom:0.7rem"></div>
+  <div class="modal-actions">
+    <button class="btn-primary" onclick="confirmMidBowler()">CONFIRM</button>
+    <button class="btn-secondary" onclick="closeModal('modal-mid-bowl')">CANCEL</button>
   </div>
 </div></div>
 
@@ -1829,10 +1841,41 @@ function showOverEndModal(inn,bwl){
 }
 function confirmNextBowler(){
   const n=document.getElementById('next-bowl-inp').value.trim();if(!n)return alert('Enter bowler name');
+  if(n===match.currentBowler)return alert('Same bowler cannot bowl consecutive overs (cricket rule).');
   initBowl(curInn(),n);match.currentBowler=n;closeModal('modal-over-end');
   if(match.innings===2&&!match.result)checkWin();updateUI();sbSave(match);
 }
-function sameBowler(){closeModal('modal-over-end');if(match.innings===2&&!match.result)checkWin();updateUI();sbSave(match);}
+
+// ═══ MID-OVER INJURY BOWLER CHANGE ═══
+function openMidBowlerChange(){
+  if(!match)return;
+  const fieldingTeam=match.innings===1?match.team2:match.team1;
+  const fieldingTeamObj=teams.find(t=>t.name===fieldingTeam);
+  const teamPlayers=fieldingTeamObj?.players||[];
+  const inn=curInn();
+  const suggestions=[...new Set([...Object.keys(inn.bowlers),...teamPlayers])].filter(p=>p!==match.currentBowler);
+  document.getElementById('sug-mid-bowl').innerHTML=suggestions.map(n=>`<button class="suggest-pill" onclick="document.getElementById('mid-bowl-inp').value='${n.replace(/'/g,"\'")}'">${n}</button>`).join('');
+  document.getElementById('mid-bowl-inp').value='';
+  openModal('modal-mid-bowl');
+}
+function filterMidBowlSug(){
+  const v=document.getElementById('mid-bowl-inp').value.toLowerCase();
+  document.querySelectorAll('#sug-mid-bowl .suggest-pill').forEach(b=>{b.style.display=b.textContent.toLowerCase().includes(v)?'':'none';});
+}
+function confirmMidBowler(){
+  const n=document.getElementById('mid-bowl-inp').value.trim();if(!n)return alert('Enter replacement bowler name');
+  if(n===match.currentBowler)return alert('Select a different bowler');
+  const inn=curInn();
+  // Transfer current over balls to replacement bowler
+  if(!inn.bowlers[n])inn.bowlers[n]={runs:0,wickets:0,balls:0,overs:[]};
+  // Mark injured bowler's incomplete over
+  const injBowler=match.currentBowler;
+  if(inn.bowlers[injBowler])inn.bowlers[injBowler].injured=true;
+  match.currentBowler=n;
+  closeModal('modal-mid-bowl');
+  updateUI();sbSave(match);
+  alert('Bowler changed to ' + n + '. Over will continue.');
+}
 
 // ═══ WICKET FLOW ═══
 function showWicketModal(){
