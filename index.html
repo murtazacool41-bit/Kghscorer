@@ -1408,191 +1408,274 @@ function saveTournament(){
 function generateFixtures(teams,format){
   const fixtures=[];
   if(format==='Knockout'||format==='Cup'){
-    // Single elimination bracket
-    let round=1;let currentTeams=[...teams];
-    while(currentTeams.length>1){
-      const roundFixtures=[];
-      for(let i=0;i<currentTeams.length-1;i+=2){
-        roundFixtures.push({id:Date.now()+Math.random(),round,team1:currentTeams[i],team2:currentTeams[i+1],matchId:null,winner:null});
+    // Seed teams into proper bracket slots
+    const n=teams.length;
+    let slots=nextPow2(n);
+    const seeded=[...teams];
+    while(seeded.length<slots)seeded.push('BYE');
+    let round=1;let currentSlots=[...seeded];
+    while(currentSlots.length>1){
+      const roundF=[];
+      for(let i=0;i<currentSlots.length-1;i+=2){
+        const isBye=currentSlots[i]==='BYE'||currentSlots[i+1]==='BYE';
+        roundF.push({id:Date.now()+Math.random()*9999,round,
+          team1:currentSlots[i]==='BYE'?'TBD':currentSlots[i],
+          team2:currentSlots[i+1]==='BYE'?'TBD':currentSlots[i+1],
+          matchId:null,winner:isBye?(currentSlots[i]==='BYE'?currentSlots[i+1]:currentSlots[i]):null,
+          isBye,score1:'',score2:''});
       }
-      if(currentTeams.length%2===1)roundFixtures[roundFixtures.length-1].bye=currentTeams[currentTeams.length-1];
-      fixtures.push(...roundFixtures);
-      currentTeams=new Array(Math.ceil(currentTeams.length/2)).fill('TBD');
+      fixtures.push(...roundF);
+      currentSlots=new Array(currentSlots.length/2).fill('TBD');
       round++;
     }
   } else {
-    // Round robin — every team plays every other
-    for(let i=0;i<teams.length;i++){
-      for(let j=i+1;j<teams.length;j++){
-        fixtures.push({id:Date.now()+Math.random(),round:1,team1:teams[i],team2:teams[j],matchId:null,winner:null});
+    // Round robin with proper scheduling (circle algorithm)
+    const n=teams.length;
+    const t=[...teams];
+    if(n%2===1)t.push('BYE');
+    const totalRounds=t.length-1;
+    const fixed=t[0];
+    const rotating=t.slice(1);
+    for(let r=0;r<totalRounds;r++){
+      const roundTeams=[fixed,...rotating];
+      const half=roundTeams.length/2;
+      for(let i=0;i<half;i++){
+        const t1=roundTeams[i],t2=roundTeams[roundTeams.length-1-i];
+        if(t1!=='BYE'&&t2!=='BYE')
+          fixtures.push({id:Date.now()+Math.random()*9999,round:r+1,team1:t1,team2:t2,matchId:null,winner:null,score1:'',score2:''});
       }
+      rotating.unshift(rotating.pop());
     }
   }
   return fixtures;
+}
+
+function nextPow2(n){let p=1;while(p<n)p*=2;return p;}
+
+function computePointsTable(t){
+  const tms=matches.filter(m=>m.tournamentId===t.id);
+  const tb={};
+  // Init all tournament teams
+  (t.teams||[]).forEach(tn=>{if(!tb[tn])tb[tn]={p:0,w:0,l:0,d:0,pts:0,rf:0,ra:0,of:0,oa:0};});
+  tms.forEach(m=>{
+    [m.team1,m.team2].forEach(tn=>{if(!tb[tn])tb[tn]={p:0,w:0,l:0,d:0,pts:0,rf:0,ra:0,of:0,oa:0};});
+    if(!m.result)return;
+    tb[m.team1].p++;tb[m.team2].p++;
+    tb[m.team1].rf+=(m.inning1?.runs||0);tb[m.team1].of+=(m.inning1?.balls||1);
+    if(m.inning2){tb[m.team2].rf+=(m.inning2.runs||0);tb[m.team2].of+=(m.inning2.balls||1);
+      tb[m.team1].ra+=(m.inning2.runs||0);tb[m.team1].oa+=(m.inning2.balls||1);}
+    tb[m.team2].ra+=(m.inning1?.runs||0);tb[m.team2].oa+=(m.inning1?.balls||1);
+    if(m.result.winner===m.team1){tb[m.team1].w++;tb[m.team1].pts+=2;tb[m.team2].l++;}
+    else if(m.result.winner===m.team2){tb[m.team2].w++;tb[m.team2].pts+=2;tb[m.team1].l++;}
+    else{tb[m.team1].d++;tb[m.team2].d++;tb[m.team1].pts++;tb[m.team2].pts++;}
+  });
+  return Object.entries(tb).sort((a,b)=>{
+    if(b[1].pts!==a[1].pts)return b[1].pts-a[1].pts;
+    const nrrA=a[1].of>0?(a[1].rf/(a[1].of/6))-(a[1].ra/(a[1].oa/6||1)):0;
+    const nrrB=b[1].of>0?(b[1].rf/(b[1].of/6))-(b[1].ra/(b[1].oa/6||1)):0;
+    return nrrB-nrrA;
+  });
+}
+
+function checkAutoQualification(t){
+  if(t.format!=='League'&&t.format!=='Round Robin')return;
+  if(t.knockoutGenerated)return;
+  // Check if all RR fixtures are done
+  const allDone=t.fixtures.every(f=>f.winner||f.isBye);
+  if(!allDone)return;
+  const sorted=computePointsTable(t);
+  const qualifyCount=sorted.length>=4?4:sorted.length>=2?2:0;
+  if(!qualifyCount)return;
+  const qualifiers=sorted.slice(0,qualifyCount).map(([tn])=>tn);
+  const koFixtures=generateFixtures(qualifiers,'Knockout');
+  const maxRrRound=Math.max(...t.fixtures.map(f=>f.round),0);
+  const koStart=maxRrRound+1;
+  koFixtures.forEach(f=>f.round+=maxRrRound);
+  t.fixtures.push(...koFixtures);
+  t.knockoutGenerated=true;
+  t.knockoutStartRound=koStart;
+  t.qualifiers=qualifiers;
+  save('kgh-tournaments',tournaments);
+  showToast(`🏆 Top ${qualifyCount} qualified! Knockout stage generated!`);
 }
 
 function renderTournaments(){
   const el=document.getElementById('tournament-list');
   if(!tournaments.length){el.innerHTML='<div class="empty-state"><div class="empty-icon">🏆</div><div>No tournaments yet</div></div>';return;}
   el.innerHTML=tournaments.map(t=>{
-    const tms=matches.filter(m=>m.tournamentId===t.id);
-    // Update fixtures with match results
     if(t.fixtures)t.fixtures.forEach(f=>{
-      const m=matches.find(mx=>mx.id===f.matchId||((mx.team1===f.team1&&mx.team2===f.team2)||(mx.team1===f.team2&&mx.team2===f.team1))&&mx.tournamentId===t.id&&mx.result);
-      if(m&&m.result){f.winner=m.result.winner;f.matchId=m.id;f.score1=m.inning1?.runs+'/'+m.inning1?.wickets;f.score2=m.inning2?.runs+'/'+m.inning2?.wickets;}
+      if(f.winner)return;
+      const m=matches.find(mx=>mx.tournamentId===t.id&&mx.result&&
+        ((mx.team1===f.team1&&mx.team2===f.team2)||(mx.team1===f.team2&&mx.team2===f.team1)));
+      if(m&&m.result){f.winner=m.result.winner;f.matchId=m.id;
+        f.score1=m.inning1?m.inning1.runs+'/'+m.inning1.wickets:'';
+        f.score2=m.inning2?m.inning2.runs+'/'+m.inning2.wickets:'';}
     });
-
-    // Points table
-    const tb={};
-    tms.forEach(m=>{
-      [m.team1,m.team2].forEach(tn=>{if(!tb[tn])tb[tn]={p:0,w:0,l:0,pts:0,rf:0,ra:0,of:0,oa:0};});
-      if(!m.result)return;
-      tb[m.team1].p++;tb[m.team2].p++;
-      tb[m.team1].rf+=(m.inning1?.runs||0);tb[m.team1].of+=(m.inning1?.balls||1);
-      if(m.inning2){tb[m.team2].rf+=(m.inning2.runs||0);tb[m.team2].of+=(m.inning2.balls||1);tb[m.team1].ra+=(m.inning2.runs||0);tb[m.team1].oa+=(m.inning2.balls||1);}
-      tb[m.team2].ra+=(m.inning1?.runs||0);tb[m.team2].oa+=(m.inning1?.balls||1);
-      if(m.result.winner===m.team1){tb[m.team1].w++;tb[m.team1].pts+=2;tb[m.team2].l++;}
-      else if(m.result.winner===m.team2){tb[m.team2].w++;tb[m.team2].pts+=2;tb[m.team1].l++;}
-    });
-    const sorted=Object.entries(tb).sort((a,b)=>b[1].pts-a[1].pts);
-
-    // Bracket rounds
-    const maxRound=t.fixtures?Math.max(...t.fixtures.map(f=>f.round),1):1;
-    const roundNames={1:t.fixtures?.length>8?'Quarter Finals':t.fixtures?.length>4?'Semi Finals':'Final'};
-    if(maxRound>=2)roundNames[2]=maxRound>=3?'Semi Finals':'Final';
-    if(maxRound>=3)roundNames[3]='Final';
-
+    if(t.format==='Knockout'||t.format==='Cup'||t.knockoutGenerated)advanceKnockout(t);
+    if(t.format==='League'||t.format==='Round Robin')checkAutoQualification(t);
+    const sorted=computePointsTable(t);
+    const maxRound=t.fixtures&&t.fixtures.length?Math.max(...t.fixtures.map(f=>f.round)):1;
+    const isKO=t.format==='Knockout'||t.format==='Cup';
+    const hasBracket=isKO||t.knockoutGenerated;
+    const allFixtures=t.fixtures||[];
+    const koStart=t.knockoutStartRound||1;
+    const koFixtures=isKO?allFixtures:allFixtures.filter(f=>f.round>=koStart);
+    const finalFs=allFixtures.filter(f=>f.round===maxRound);
+    const champion=finalFs.length&&finalFs[0].winner?finalFs[0].winner:null;
+    const playedCount=allFixtures.filter(f=>f.winner&&!f.isBye).length;
+    const totalCount=allFixtures.filter(f=>!f.isBye).length;
     return`<div class="card" style="margin-bottom:1rem">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.8rem">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:0.6rem">
         <div>
           <div style="font-family:'Bebas Neue',sans-serif;font-size:1.3rem;color:var(--gold);letter-spacing:1px">🏆 ${t.name}</div>
-          <div style="font-size:0.78rem;color:var(--muted)">${t.format} • ${t.overs} overs • ${t.teams?.length||0} teams</div>
+          <div style="font-size:0.78rem;color:var(--muted)">${t.format} • ${t.overs} ov • ${t.teams&&t.teams.length?t.teams.length:0} teams • ${playedCount}/${totalCount} played</div>
+          ${champion?`<div style="font-size:0.82rem;color:var(--gold);margin-top:2px">👑 Champion: <b>${champion}</b></div>`:''}
+          ${t.qualifiers&&t.qualifiers.length?`<div style="font-size:0.75rem;color:var(--green);margin-top:2px">✅ Qualified: ${t.qualifiers.join(', ')}</div>`:''}
         </div>
         <button class="btn-danger btn-sm" onclick="deleteTournament(${t.id})">✕</button>
       </div>
-
-      <!-- Tabs -->
       <div class="t-tabs">
         <button class="t-tab active" onclick="showTTab(this,'tt-fixtures-${t.id}')">Fixtures</button>
-        <button class="t-tab" onclick="showTTab(this,'tt-table-${t.id}')">Points Table</button>
-        ${t.format==='Knockout'||t.format==='Cup'?`<button class="t-tab" onclick="showTTab(this,'tt-bracket-${t.id}')">Bracket</button>`:''}
+        <button class="t-tab" onclick="showTTab(this,'tt-table-${t.id}')">Table</button>
+        ${hasBracket?`<button class="t-tab" onclick="showTTab(this,'tt-bracket-${t.id}')">Bracket</button>`:''}
       </div>
-
-      <!-- FIXTURES -->
-      <div id="tt-fixtures-${t.id}">
-        ${t.fixtures&&t.fixtures.length?[...new Set(t.fixtures.map(f=>f.round))].map(round=>`
-          <div style="font-size:0.72rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin-bottom:0.4rem;margin-top:${round>1?'0.8rem':'0'}">${getRoundName(round,maxRound,t.fixtures.length)}</div>
-          ${t.fixtures.filter(f=>f.round===round).map(f=>`
-            <div class="fixture-card">
-              <div class="fixture-teams">
-                <div class="fixture-team ${f.winner===f.team1?'fixture-winner':''}">${f.team1}</div>
-                <div style="text-align:center">
-                  ${f.winner?`<div class="fixture-score">${f.score1||''}</div><div style="font-size:0.65rem;color:var(--muted)">vs</div><div class="fixture-score">${f.score2||''}</div>`:`<div class="fixture-vs">VS</div>`}
-                </div>
-                <div class="fixture-team right ${f.winner===f.team2?'fixture-winner':''}">${f.team2==='TBD'?'<span style="color:var(--muted)">TBD</span>':f.team2}</div>
-              </div>
-              ${f.winner?`<div class="fixture-result">✅ ${f.winner} won</div>`:''}
-              ${!f.winner&&f.team2!=='TBD'?`<button class="btn-secondary btn-sm" style="width:100%;margin-top:0.4rem" onclick="startTournamentMatch(${t.id},'${f.team1}','${f.team2}',${f.id})">🏏 Start Match</button>`:''}
-            </div>`).join('')}`).join('')
-        :'<div style="color:var(--muted);font-size:0.85rem">No fixtures yet</div>'}
-      </div>
-
-      <!-- POINTS TABLE -->
-      <div id="tt-table-${t.id}" style="display:none">
-        ${sorted.length?`
-        <div class="stand-row hdr"><div>#</div><div>TEAM</div><div>P</div><div>W</div><div>L</div><div>PTS</div><div>NRR</div></div>
-        ${sorted.map(([tn,s],i)=>{
-          const nrr=s.of>0?((s.rf/(s.of/6))-(s.ra/(s.oa/6||1))).toFixed(3):'+0.000';
-          return`<div class="stand-row">
-            <div style="color:var(--muted)">${i+1}</div>
-            <div style="font-weight:600">${tn}${i===0?' 🥇':i===1?' 🥈':i===2?' 🥉':''}</div>
-            <div>${s.p}</div><div>${s.w}</div><div>${s.l}</div>
-            <div class="pts-cell">${s.pts}</div>
-            <div class="${parseFloat(nrr)>=0?'nrr-pos':'nrr-neg'}">${nrr}</div>
-          </div>`;}).join('')}`
-        :'<div style="color:var(--muted);font-size:0.85rem">No matches played yet</div>'}
-      </div>
-
-      <!-- BRACKET -->
-      ${t.format==='Knockout'||t.format==='Cup'?`
-      <div id="tt-bracket-${t.id}" style="display:none">
-        <div class="bracket-wrap">
-          <div class="bracket">
-            ${[...new Set(t.fixtures?.map(f=>f.round)||[])].map(round=>{
-              const roundFixtures=(t.fixtures||[]).filter(f=>f.round===round);
-              return`<div class="bracket-round">
-                <div class="bracket-round-title">${getRoundName(round,maxRound,t.fixtures?.length||0)}</div>
-                ${roundFixtures.map(f=>`
-                  <div class="bracket-match">
-                    <div class="bracket-team ${f.winner===f.team1?'winner':f.team1==='TBD'?'tbd':''}">${f.team1==='TBD'?'TBD':f.team1}<span class="bracket-score">${f.score1||''}</span></div>
-                    <div class="bracket-team ${f.winner===f.team2?'winner':f.team2==='TBD'?'tbd':''}">${f.team2==='TBD'?'TBD':f.team2}<span class="bracket-score">${f.score2||''}</span></div>
-                  </div>`).join('<div style="height:0.4rem"></div>')}
-              </div>
-              ${round<maxRound?`<div class="bracket-arrow">→</div>`:''}`;
-            }).join('')}
-          </div>
-        </div>
-        ${tms.filter(m=>m.result).length===t.fixtures?.length&&t.fixtures?.length?`
-        <div class="result-banner" style="margin-top:0.8rem">
-          <div class="result-text">🏆 CHAMPION</div>
-          <div style="font-size:1.2rem;font-weight:700;color:var(--gold);margin-top:0.3rem">${sorted[0]?.[0]||'TBD'}</div>
-        </div>`:''}
-      </div>`:''}
+      <div id="tt-fixtures-${t.id}">${renderFixtureList(t,maxRound)}</div>
+      <div id="tt-table-${t.id}" style="display:none">${renderPointsTable(sorted,t)}</div>
+      ${hasBracket?`<div id="tt-bracket-${t.id}" style="display:none">${renderBracket(t,maxRound,champion)}</div>`:''}
     </div>`;
   }).join('');
 }
 
+function renderFixtureList(t,maxRound){
+  if(!t.fixtures||!t.fixtures.length)return'<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem">No fixtures generated</div>';
+  const isLeague=t.format==='League'||t.format==='Round Robin';
+  const koStart=t.knockoutStartRound||999;
+  const rounds=[...new Set(t.fixtures.map(f=>f.round))].sort((a,b)=>a-b);
+  const rrRounds=isLeague?rounds.filter(r=>r<koStart):[];
+  const koRounds=isLeague?rounds.filter(r=>r>=koStart):rounds;
+  let html='';
+  if(rrRounds.length){
+    html+=`<div style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;color:var(--green);letter-spacing:1px;margin:0.4rem 0">LEAGUE STAGE</div>`;
+    rrRounds.forEach(round=>{
+      html+=`<div style="font-size:0.7rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin:0.5rem 0 0.25rem">ROUND ${round}</div>`;
+      t.fixtures.filter(f=>f.round===round).forEach(f=>{html+=renderFixtureCard(t,f);});
+    });
+  }
+  if(koRounds.length){
+    if(rrRounds.length)html+=`<div style="font-family:'Bebas Neue',sans-serif;font-size:0.78rem;color:var(--gold);letter-spacing:1px;margin:0.8rem 0 0.4rem">🏆 KNOCKOUT STAGE</div>`;
+    koRounds.forEach(round=>{
+      html+=`<div style="font-size:0.7rem;color:var(--muted);font-weight:700;letter-spacing:1px;margin:0.5rem 0 0.25rem">${getRoundName(round,maxRound,t.fixtures.length)}</div>`;
+      t.fixtures.filter(f=>f.round===round).forEach(f=>{html+=renderFixtureCard(t,f);});
+    });
+  }
+  return html;
+}
+
+function renderFixtureCard(t,f){
+  if(f.isBye&&f.winner)return`<div class="fixture-card" style="opacity:0.55"><div class="fixture-teams"><div class="fixture-team fixture-winner">${f.winner}</div><div style="text-align:center;font-size:0.7rem;color:var(--muted)">BYE</div><div class="fixture-team" style="color:var(--muted)">—</div></div></div>`;
+  const canStart=!f.winner&&f.team1!=='TBD'&&f.team2!=='TBD'&&!f.isBye;
+  return`<div class="fixture-card">
+    <div class="fixture-teams">
+      <div class="fixture-team ${f.winner===f.team1?'fixture-winner':''}">${f.team1}</div>
+      <div style="text-align:center;min-width:50px">
+        ${f.winner?`<div class="fixture-score" style="font-size:0.7rem">${f.score1||'—'}</div><div style="font-size:0.6rem;color:var(--muted)">vs</div><div class="fixture-score" style="font-size:0.7rem">${f.score2||'—'}</div>`:`<div class="fixture-vs">VS</div>`}
+      </div>
+      <div class="fixture-team right ${f.winner===f.team2?'fixture-winner':''}">${f.team2==='TBD'?'<span style="color:var(--muted)">TBD</span>':f.team2}</div>
+    </div>
+    ${f.winner?`<div class="fixture-result">✅ ${f.winner} won</div>`:''}
+    ${canStart?`<button class="btn-secondary btn-sm" style="width:100%;margin-top:0.5rem" onclick="startTournamentMatch(${t.id},'${f.team1}','${f.team2}',${f.id})">🏏 Start Match</button>`:''}
+  </div>`;
+}
+
+function renderPointsTable(sorted,t){
+  if(!sorted.length)return'<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem">No matches played yet</div>';
+  const isLeague=t.format==='League'||t.format==='Round Robin';
+  const qualCount=isLeague?Math.min(sorted.length>=4?4:2,sorted.length):0;
+  return`<div class="stand-row hdr"><div>#</div><div>TEAM</div><div>P</div><div>W</div><div>L</div><div>PTS</div><div>NRR</div></div>
+  ${sorted.map(([tn,s],i)=>{
+    const nrr=s.of>0?((s.rf/(s.of/6))-(s.ra/(s.oa/6||1))).toFixed(3):'0.000';
+    const q=isLeague&&!t.knockoutGenerated&&i<qualCount;
+    return`<div class="stand-row" ${q?'style="border-left:3px solid var(--green)"':''}>
+      <div style="color:var(--muted)">${i+1}</div>
+      <div style="font-weight:600">${tn}${i===0?' 🥇':i===1?' 🥈':i===2?' 🥉':''}${q?' <span style="font-size:0.65rem;color:var(--green)">Q</span>':''}</div>
+      <div>${s.p}</div><div>${s.w}</div><div>${s.l}</div>
+      <div class="pts-cell">${s.pts}</div>
+      <div class="${parseFloat(nrr)>=0?'nrr-pos':'nrr-neg'}">${parseFloat(nrr)>=0?'+':''}${nrr}</div>
+    </div>`;}).join('')}
+  ${isLeague&&!t.knockoutGenerated?`<div style="font-size:0.72rem;color:var(--green);margin-top:0.5rem;padding:0.25rem 0">🔝 Top ${qualCount} qualify — knockout auto-generates when all matches done</div>`:''}`;
+}
+
+function renderBracket(t,maxRound,champion){
+  const isLeague=t.format==='League'||t.format==='Round Robin';
+  const koStart=t.knockoutStartRound||1;
+  const fixtures=t.fixtures||[];
+  const koFixtures=isLeague?fixtures.filter(f=>f.round>=koStart):fixtures;
+  if(!koFixtures.length)return'<div style="color:var(--muted);font-size:0.85rem;padding:0.5rem">Bracket appears after league stage completes</div>';
+  const koRounds=[...new Set(koFixtures.map(f=>f.round))].sort((a,b)=>a-b);
+  const koMax=Math.max(...koRounds);
+  let html='<div class="bracket-wrap"><div class="bracket">';
+  koRounds.forEach((round,ri)=>{
+    const rfs=koFixtures.filter(f=>f.round===round);
+    html+=`<div class="bracket-round">
+      <div class="bracket-round-title">${getRoundName(round,koMax,koFixtures.length)}</div>
+      ${rfs.map(f=>`<div class="bracket-match" style="margin-bottom:0.5rem">
+        <div class="bracket-team ${f.winner===f.team1?'winner':f.team1==='TBD'?'tbd':''}">${f.team1==='TBD'?'TBD':f.team1}<span class="bracket-score">${f.score1||''}</span></div>
+        <div class="bracket-team ${f.winner===f.team2?'winner':f.team2==='TBD'?'tbd':''}">${f.team2==='TBD'?'TBD':f.team2}<span class="bracket-score">${f.score2||''}</span></div>
+      </div>`).join('')}
+    </div>${ri<koRounds.length-1?'<div class="bracket-arrow">→</div>':''}`;
+  });
+  html+='</div></div>';
+  if(champion)html+=`<div class="result-banner" style="margin-top:0.8rem"><div class="result-text">🏆 CHAMPION</div><div style="font-size:1.3rem;font-weight:700;color:var(--gold);margin-top:0.3rem">${champion}</div></div>`;
+  return html;
+}
+
 function advanceKnockout(t){
-  // Group fixtures by round
+  if(!t.fixtures||!t.fixtures.length)return;
   const maxRound=Math.max(...t.fixtures.map(f=>f.round));
-  for(let round=1;round<maxRound;round++){
-    const roundFixtures=t.fixtures.filter(f=>f.round===round);
-    const nextRoundFixtures=t.fixtures.filter(f=>f.round===round+1);
-    const winners=roundFixtures.map(f=>f.winner).filter(Boolean);
-    // Fill next round with winners
-    winners.forEach((w,i)=>{
-      const nextFix=nextRoundFixtures[Math.floor(i/2)];
-      if(nextFix){
-        if(i%2===0)nextFix.team1=w;
-        else nextFix.team2=w;
-      }
+  const koStart=t.knockoutStartRound||1;
+  for(let round=koStart;round<maxRound;round++){
+    const roundFs=t.fixtures.filter(f=>f.round===round);
+    const nextFs=t.fixtures.filter(f=>f.round===round+1);
+    const winners=roundFs.map(f=>f.winner).filter(Boolean);
+    let slot=0;
+    nextFs.forEach(nf=>{
+      if(slot<winners.length&&nf.team1==='TBD'){nf.team1=winners[slot++];}
+      else if(slot<winners.length&&nf.team2==='TBD'){nf.team2=winners[slot++];}
     });
   }
 }
 
 function getRoundName(round,maxRound,totalFixtures){
-  const remaining=maxRound-round+1;
-  if(remaining===1)return'🏆 FINAL';
-  if(remaining===2)return'🔥 SEMI FINALS';
-  if(remaining===3)return'⚡ QUARTER FINALS';
-  return`ROUND ${round}`;
+  const rem=maxRound-round+1;
+  if(rem===1)return'🏆 FINAL';
+  if(rem===2)return'🔥 SEMI FINALS';
+  if(rem===3)return'⚡ QUARTER FINALS';
+  return'ROUND '+round;
 }
 
 function showTTab(btn,tabId){
   const card=btn.closest('.card');
   card.querySelectorAll('.t-tab').forEach(t=>t.classList.remove('active'));
   btn.classList.add('active');
-  const prefix=tabId.substring(0,tabId.lastIndexOf('-')+1).replace(/\d+$/,'');
   ['tt-fixtures-','tt-table-','tt-bracket-'].forEach(p=>{
-    const el=card.querySelector(`[id^="${p}"]`);if(el)el.style.display='none';
+    const el=card.querySelector('[id^="'+p+'"]');if(el)el.style.display='none';
   });
   const target=document.getElementById(tabId);if(target)target.style.display='block';
 }
 
 function startTournamentMatch(tournamentId,team1,team2,fixtureId){
   const t=tournaments.find(t=>t.id===tournamentId);if(!t)return;
-  // Pre-fill match setup
   document.getElementById('instant-tog').checked=true;toggleInstant();
   document.getElementById('it1').value=team1;
   document.getElementById('it2').value=team2;
   document.getElementById('s-venue').value=t.name;
   updateTossOpts();
-  // Store tournament context
   window._pendingTournamentMatch={tournamentId,fixtureId};
-  showTab('score');showToast(`Setting up: ${team1} vs ${team2}`);
+  showTab('score');showToast('Setting up: '+team1+' vs '+team2);
 }
 
 function deleteTournament(id){if(!confirm('Delete?'))return;tournaments=tournaments.filter(t=>t.id!==id);save('kgh-tournaments',tournaments);renderTournaments();}
+
 
 // ═══════════════════════════════════════════════════════════════════
 // MATCH ENGINE
