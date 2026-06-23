@@ -1018,7 +1018,7 @@ let players=JSON.parse(localStorage.getItem('kgh-players')||'[]');
 let tournaments=JSON.parse(localStorage.getItem('kgh-tournaments')||'[]');
 let matches=JSON.parse(localStorage.getItem('kgh-matches')||'[]');
 let accounts=JSON.parse(localStorage.getItem('kgh-accounts')||'[]');
-let adminPass=localStorage.getItem('kgh-admin-pass')||'kgh2024';
+let adminPass=null; // password now stored as SHA-256 hash only
 let viewCount=parseInt(localStorage.getItem('kgh-views')||'0');
 let currentUser=null;
 let match=null;
@@ -1034,6 +1034,16 @@ let tmSelPlayers=[];
 let editingTeamId=null;
 
 function save(k,v){localStorage.setItem(k,JSON.stringify(v));}
+
+// Migrate plaintext password to hash on first load
+(async()=>{
+  const plain=localStorage.getItem('kgh-admin-pass');
+  if(plain){
+    await hashAndStore(plain);
+    localStorage.removeItem('kgh-admin-pass');
+    console.log('Admin password migrated to SHA-256 hash');
+  }
+})();
 function showToast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2200);}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1050,7 +1060,7 @@ setTheme(localStorage.getItem('kgh-theme')||'');
 // ═══ AUTH ═══
 function initAccounts(){
   if(!accounts.find(a=>a.email==='admin@kgh.com'))
-    accounts.push({email:'admin@kgh.com',password:'kgh2024',name:'Admin',role:'admin',createdAt:new Date().toISOString().split('T')[0],matchCount:0});
+    accounts.push({email:'admin@kgh.com',password:'[protected]',name:'Admin',role:'admin',createdAt:new Date().toISOString().split('T')[0],matchCount:0});
   save('kgh-accounts',accounts);
 }
 function showRegForm(){document.getElementById('login-form-wrap').style.display='none';document.getElementById('reg-form-wrap').style.display='block';}
@@ -2833,10 +2843,56 @@ function renderStats(){
 }
 
 // ═══ ADMIN ═══
+
+// ═══ SHA-256 PASSWORD HASHING ═══
+async function sha256(str){
+  const buf=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(str));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function hashAndStore(pass){
+  const h=await sha256(pass);
+  localStorage.setItem('kgh-admin-hash',h);
+  localStorage.removeItem('kgh-admin-pass'); // remove plaintext
+  return h;
+}
+
+async function verifyAdminPass(input){
+  const stored=localStorage.getItem('kgh-admin-hash');
+  if(!stored){
+    // First time / migration: hash default and compare
+    const defHash=await sha256('kgh2024');
+    if(input==='kgh2024'||await sha256(input)===defHash){
+      await hashAndStore(input==='kgh2024'?'kgh2024':input);
+      return true;
+    }
+    return false;
+  }
+  const inputHash=await sha256(input);
+  return inputHash===stored;
+}
+
 function initAdmin(){document.getElementById('admin-locked-wrap').style.display='block';document.getElementById('admin-panel-wrap').style.display='none';document.getElementById('adm-pass').value='';document.getElementById('adm-err').style.display='none';}
-function checkAdminPass(){const p=document.getElementById('adm-pass').value;if(p===adminPass){document.getElementById('admin-locked-wrap').style.display='none';document.getElementById('admin-panel-wrap').style.display='block';renderAdminAccounts();renderAdminMatches();}else document.getElementById('adm-err').style.display='block';}
+async function checkAdminPass(){
+  const p=document.getElementById('adm-pass').value;
+  const ok=await verifyAdminPass(p);
+  if(ok){
+    document.getElementById('admin-locked-wrap').style.display='none';
+    document.getElementById('admin-panel-wrap').style.display='block';
+    renderAdminAccounts();renderAdminMatches();
+  } else {
+    document.getElementById('adm-err').style.display='block';
+  }
+}
 function lockAdmin(){document.getElementById('admin-locked-wrap').style.display='block';document.getElementById('admin-panel-wrap').style.display='none';}
-function changeAdminPass(){const np=document.getElementById('adm-new-pass').value.trim();if(!np||np.length<4)return alert('Min 4 chars');adminPass=np;localStorage.setItem('kgh-admin-pass',adminPass);document.getElementById('adm-new-pass').value='';showToast('Password changed!');}
+async function changeAdminPass(){
+  const np=document.getElementById('adm-new-pass').value.trim();
+  if(!np||np.length<4)return alert('Min 4 chars');
+  await hashAndStore(np);
+  adminPass=null; // no longer stored in memory as plaintext
+  document.getElementById('adm-new-pass').value='';
+  showToast('✅ Password changed & secured!');
+}
 function renderAdminAccounts(){
   const el=document.getElementById('admin-accounts');
   if(!accounts.length){el.innerHTML='<div style="color:var(--muted);font-size:0.82rem">No accounts.</div>';return;}
