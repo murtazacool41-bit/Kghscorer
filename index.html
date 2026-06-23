@@ -847,10 +847,46 @@ tr:hover td{background:var(--green-bg)}
   <div class="modal-title">🏆 MATCH OVER!</div>
   <div id="match-over-result" style="font-size:1rem;font-weight:700;color:var(--green);margin-bottom:1rem;text-align:center;line-height:1.4"></div>
   <div style="display:flex;flex-direction:column;gap:0.5rem">
+    <button id="btn-start-super-over" class="btn-primary" style="display:none;background:linear-gradient(135deg,#cc7700,#ff9900);font-size:1.1rem" onclick="closeModal('modal-match-over');openSuperOverSetup()">⚡ START SUPER OVER</button>
     <button class="btn-primary" onclick="goNewMatch()">🏏 NEW MATCH</button>
     <button class="btn-secondary" onclick="closeModal('modal-match-over');showTab('scorecard')">📋 VIEW SCORECARD</button>
     <button class="btn-share" style="width:100%;text-align:center" onclick="shareLiveLink()">🔗 SHARE RESULT</button>
     <button class="btn-pdf" style="width:100%;text-align:center" onclick="exportPDF()">📄 DOWNLOAD PDF</button>
+  </div>
+</div></div>
+
+
+<!-- SUPER OVER SETUP MODAL -->
+<div class="modal-overlay" id="modal-super-over-setup"><div class="modal" style="max-height:85vh;overflow-y:auto">
+  <div class="modal-title">⚡ SUPER OVER</div>
+  <div style="background:var(--card2);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.82rem;color:var(--muted);text-align:center">
+    MATCH TIED — 1 over per team, max 2 wickets
+  </div>
+  <div id="so-setup-batting-label" style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;color:var(--green);margin-bottom:0.4rem">BATTING TEAM BATTERS (select 3)</div>
+  <div id="so-batter-chips" style="display:flex;flex-wrap:wrap;gap:0.4rem;margin-bottom:0.6rem"></div>
+  <div class="form-group"><input id="so-bat1-inp" placeholder="Batter 1 (Striker)" style="margin-bottom:0.4rem"></div>
+  <div class="form-group"><input id="so-bat2-inp" placeholder="Batter 2 (Non-striker)" style="margin-bottom:0.4rem"></div>
+  <div class="form-group"><input id="so-bat3-inp" placeholder="Batter 3 (Reserve)" style="margin-bottom:0.8rem"></div>
+  <div id="so-setup-bowl-label" style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;color:var(--red);margin-bottom:0.4rem">BOWLING TEAM BOWLER</div>
+  <div class="form-group"><input id="so-bowl-inp" placeholder="Bowler name"></div>
+  <div id="so-setup-error" style="color:var(--red);font-size:0.8rem;margin-bottom:0.5rem;display:none"></div>
+  <div class="modal-actions">
+    <button class="btn-primary" onclick="startSuperOver()">START SUPER OVER ⚡</button>
+  </div>
+</div></div>
+
+<!-- SUPER OVER NEXT INNINGS MODAL -->
+<div class="modal-overlay" id="modal-so-next"><div class="modal">
+  <div class="modal-title">⚡ SUPER OVER — INNINGS 2</div>
+  <div id="so-next-summary" style="background:var(--card2);border-radius:8px;padding:0.7rem;margin-bottom:0.8rem;font-size:0.88rem;text-align:center"></div>
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;color:var(--green);margin-bottom:0.4rem">BATTING TEAM BATTERS (select 3)</div>
+  <div class="form-group"><input id="so2-bat1-inp" placeholder="Batter 1 (Striker)" style="margin-bottom:0.4rem"></div>
+  <div class="form-group"><input id="so2-bat2-inp" placeholder="Batter 2 (Non-striker)" style="margin-bottom:0.4rem"></div>
+  <div class="form-group"><input id="so2-bat3-inp" placeholder="Batter 3 (Reserve)" style="margin-bottom:0.8rem"></div>
+  <div style="font-family:'Bebas Neue',sans-serif;font-size:0.9rem;color:var(--red);margin-bottom:0.4rem">BOWLING TEAM BOWLER</div>
+  <div class="form-group"><input id="so2-bowl-inp" placeholder="Bowler name"></div>
+  <div class="modal-actions">
+    <button class="btn-primary" onclick="startSuperOverInnings2()">START INNINGS ⚡</button>
   </div>
 </div></div>
 
@@ -928,10 +964,13 @@ function renderPublicLive(el,m){
   const b2=inn.batters?.[m.nonStriker]||{runs:0,balls:0,fours:0,sixes:0};
   const bwl=inn.bowlers?.[m.currentBowler]||{overs:0,runs:0,wickets:0,balls:0};
   const battingTeam=m.innings===1?m.team1:m.team2;
+  const hasSO=m.superOvers&&m.superOvers.length>0;
+  const lastSO=hasSO?m.superOvers[m.superOvers.length-1]:null;
   el.innerHTML=`<div class="public-live">
   <div style="text-align:center;margin-bottom:0.8rem">
     <div style="font-family:'Bebas Neue',sans-serif;font-size:1.5rem;color:var(--green);letter-spacing:3px">KGH SCORER</div>
     <div class="live-badge" style="margin:0.3rem auto;display:inline-flex"><div class="live-dot"></div>LIVE</div>
+    ${hasSO?`<div style="display:inline-flex;align-items:center;gap:5px;background:linear-gradient(135deg,#331100,#663300);border:1px solid #ff9900;border-radius:16px;padding:3px 10px;font-size:0.75rem;font-family:'Bebas Neue',sans-serif;color:#ff9900;margin-top:4px">⚡ SUPER OVER${lastSO?.number>1?' #'+lastSO.number:''}</div>`:''}
   </div>
   ${m.toss?.winner?`<div style="font-size:0.75rem;color:var(--muted);text-align:center;margin-bottom:0.5rem">🪙 ${m.toss.winner} won toss & elected to ${m.toss.elected}</div>`:''}
   <div style="background:var(--card2);border:1px solid var(--border2);border-radius:14px;padding:1.1rem;text-align:center;margin-bottom:0.8rem">
@@ -962,6 +1001,11 @@ function renderPublicLive(el,m){
     <div>${(inn.currentOver||[]).map(b=>{const c=b==='W'?'var(--red)':b==='4'||b?.startsWith?.('4')?'var(--blue)':b==='6'||b?.startsWith?.('6')?'var(--gold)':'var(--text)';return`<span style="display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:50%;background:var(--card3);color:${c};font-size:0.72rem;font-weight:700;margin:2px">${b}</span>`;}).join('')||'<span style="color:var(--muted);font-size:0.82rem">New over</span>'}</div>
   </div>
   ${(m.commentary||[]).slice(0,6).map(c=>`<div style="padding:0.4rem 0;border-bottom:1px solid var(--border);font-size:0.8rem"><div style="font-family:'JetBrains Mono',monospace;color:var(--muted);font-size:0.68rem">${c.ov||''}</div><div style="color:${c.chip==='W'?'var(--red)':c.chip==='4'?'var(--blue)':c.chip==='6'?'var(--gold)':'var(--text)'}">${c.text||''}</div></div>`).join('')}
+  ${hasSO&&lastSO?`<div style="margin-top:0.8rem;border:2px solid #ff9900;border-radius:10px;overflow:hidden">
+    <div style="background:#331100;padding:0.4rem 0.8rem;font-family:'Bebas Neue',sans-serif;color:#ff9900;font-size:0.85rem">⚡ SUPER OVER SCORES</div>
+    ${lastSO.inn1?`<div style="padding:0.5rem 0.8rem;border-bottom:1px solid #663300;font-size:0.82rem"><b>${lastSO.batFirst}:</b> ${lastSO.inn1.runs}/${lastSO.inn1.wickets}</div>`:''}
+    ${lastSO.inn2?`<div style="padding:0.5rem 0.8rem;font-size:0.82rem"><b>${lastSO.bowlFirst}:</b> ${lastSO.inn2.runs}/${lastSO.inn2.wickets}</div>`:''}
+  </div>`:''}
   <div style="text-align:center;margin-top:1rem;font-size:0.72rem;color:var(--muted)">Auto-refreshing • <a href="${location.origin}${location.pathname}" style="color:var(--green)">Open Full App</a></div>
 </div>`;
 }
@@ -1609,7 +1653,7 @@ function curInn(){return match.innings===1?match.inning1:match.inning2;}
 function ovStr(b){return`${Math.floor(b/6)}.${b%6}`;}
 
 function goNewMatch(){
-  closeModal('modal-match-over');match=null;isFreeHit=false;pendingOverEnd=null;
+  closeModal('modal-match-over');match=null;isFreeHit=false;pendingOverEnd=null;soState=null;
   document.getElementById('score-live-wrap').style.display='none';
   document.getElementById('score-setup-wrap').style.display='block';
   document.getElementById('result-area').innerHTML='';
@@ -1632,7 +1676,10 @@ function clearExtUI(){
   document.querySelectorAll('.ext-type-btn').forEach(b=>b.classList.remove('active'));
   document.getElementById('ext-runs-section').style.display='none';
 }
-function addExtra(runs){if(!selExtType_)return;const t=selExtType_;clearExtUI();processDelivery(t,runs,null,null,'bat');}
+function addExtra(runs){
+  if(isSuperOver()){soAddExtra(runs);return;}
+  if(!selExtType_)return;const t=selExtType_;clearExtUI();processDelivery(t,runs,null,null,'bat');
+}
 function addNbRunOut(){
   if(!match||match.result)return;
   const inn=curInn();const bwl=inn.bowlers[match.currentBowler];const str=inn.batters[match.striker];
@@ -1738,6 +1785,7 @@ function processDelivery(extType,runs,dismissType,fielder,runsSrc){
 
 // ═══ UNDO ═══
 function undoBall(){
+  if(isSuperOver()){soUndoBall();return;}
   if(!match||!match.ballLog?.length){showToast('Nothing to undo!');return;}
   const last=match.ballLog.pop();const s=last.snap;
   match.innings=s.innings;match.striker=s.striker;match.nonStriker=s.nonStriker;
@@ -1796,10 +1844,15 @@ function confirmPotm(){
   const n=document.getElementById('potm-sel').value;
   if(match.result){match.result.potm=n;if(matches.length){matches[matches.length-1].result.potm=n;save('kgh-matches',matches);sbSave(matches[matches.length-1]);}}
   closeModal('modal-potm');
-  document.getElementById('match-over-result').textContent=(match.result?.text||'')+'\n🌟 POTM: '+n;
+  const potmTxt=(match.result?.text||'')+(n?'\n🌟 POTM: '+n:'');
+  document.getElementById('match-over-result').textContent=potmTxt;
+  // Show Super Over button if tied
+  const soBtn=document.getElementById('btn-start-super-over');
+  if(soBtn)soBtn.style.display=(match.result?.tied&&!match.superOvers?.length)?'block':'none';
   openModal('modal-match-over');
 }
 function endInnings(){
+  if(isSuperOver())return; // SO handles its own innings end
   if(!match||match.result)return;
   if(match.innings===1){
     document.getElementById('inn-summary').textContent=`${match.team1}: ${match.inning1.runs}/${match.inning1.wickets} in ${ovStr(match.inning1.balls)} overs. ${match.team2} needs ${match.inning1.runs+1} to win.`;
@@ -2017,7 +2070,10 @@ function updateUI(){
   const hasHurt=Object.values(inn.batters||{}).some(s=>s.retiredHurt&&!s.out);
   document.getElementById('btn-return-hurt').style.display=hasHurt?'inline-block':'none';
 }
-function swapStrike(){if(!match||match.result)return;let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;showToast('🔄 Strike swapped!');updateUI();}
+function swapStrike(){
+  if(isSuperOver()){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;showToast('🔄 Strike swapped!');soUpdateUI();return;}
+  if(!match||match.result)return;let t=match.striker;match.striker=match.nonStriker;match.nonStriker=t;showToast('🔄 Strike swapped!');updateUI();
+}
 
 // ═══ SCORECARD ═══
 
@@ -2114,6 +2170,372 @@ function showPlayerProfile(name){
 
   document.getElementById('player-profile-content').innerHTML=html;
   openModal('modal-player-profile');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// SUPER OVER SYSTEM — ICC Compliant
+// ═══════════════════════════════════════════════════════════════════
+
+let soState = null; // current super over session
+
+function newSoInn() {
+  return {runs:0,wickets:0,balls:0,extras:0,currentOver:[],batters:{},bowlers:{},
+          extrasBreakdown:{wides:0,noballs:0,legbyes:0,byes:0},fow:[],commentary:[]};
+}
+
+function openSuperOverSetup() {
+  if (!match) return;
+  if (!match.superOvers) match.superOvers = [];
+  const soNum = match.superOvers.length + 1;
+
+  // Batting team for SO1: team that batted second in main match (chase team) bats first
+  // ICC rule: team that batted 2nd in the match bats first in super over
+  const soBatFirst = match.team2; // team2 always batted 2nd (inning2)
+  const soBowlFirst = match.team1;
+
+  soState = {
+    number: soNum,
+    batFirst: soBatFirst,
+    bowlFirst: soBowlFirst,
+    currentSoInnings: 1,
+    soInn1: null,
+    soInn2: null,
+    soStriker: '', soNonStriker: '', soReserve: '', soBowler: '',
+    soIsFreeHit: false,
+    soBallLog: [],
+    soCommentary: []
+  };
+
+  // Populate batter suggestions from team
+  const batTeamObj = teams.find(t => t.name === soBatFirst);
+  document.getElementById('so-setup-batting-label').textContent = `${soBatFirst} BATTERS (select 3)`;
+  document.getElementById('so-setup-bowl-label').textContent = `${soBowlFirst} BOWLER`;
+  const chips = batTeamObj?.players || [];
+  document.getElementById('so-batter-chips').innerHTML = chips.map(p =>
+    `<button class="suggest-pill" style="font-size:0.75rem;padding:3px 8px" onclick="soFillBatter('${p.replace(/'/g,"\\'")}')">  ${p}</button>`
+  ).join('');
+  ['so-bat1-inp','so-bat2-inp','so-bat3-inp','so-bowl-inp'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('so-setup-error').style.display = 'none';
+  openModal('modal-super-over-setup');
+}
+
+let soFillIdx = 0;
+function soFillBatter(name) {
+  const fields = ['so-bat1-inp','so-bat2-inp','so-bat3-inp'];
+  const filled = fields.map(id => document.getElementById(id).value.trim());
+  const empty = fields.findIndex((id,i) => !filled[i]);
+  if (empty !== -1) document.getElementById(fields[empty]).value = name;
+}
+
+function startSuperOver() {
+  const b1 = document.getElementById('so-bat1-inp').value.trim();
+  const b2 = document.getElementById('so-bat2-inp').value.trim();
+  const b3 = document.getElementById('so-bat3-inp').value.trim();
+  const bwl = document.getElementById('so-bowl-inp').value.trim();
+  const err = document.getElementById('so-setup-error');
+  if (!b1 || !b2 || !b3) { err.textContent='Enter all 3 batters'; err.style.display='block'; return; }
+  if (!bwl) { err.textContent='Enter bowler name'; err.style.display='block'; return; }
+  if (b1 === b2 || b1 === b3 || b2 === b3) { err.textContent='Batters must be different players'; err.style.display='block'; return; }
+  err.style.display = 'none';
+
+  soState.soInn1 = newSoInn();
+  soState.soStriker = b1;
+  soState.soNonStriker = b2;
+  soState.soReserve = b3;
+  soState.soBowler = bwl;
+  soState.soIsFreeHit = false;
+  soState.soBallLog = [];
+  soState.soCommentary = [];
+  
+  // init batter/bowler records
+  soState.soInn1.batters[b1] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:''};
+  soState.soInn1.batters[b2] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:''};
+  soState.soInn1.batters[b3] = {runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:'',waiting:true};
+  soState.soInn1.bowlers[bwl] = {runs:0,wickets:0,balls:0,dots:0};
+
+  closeModal('modal-super-over-setup');
+  showTab('score');
+  document.getElementById('score-setup-wrap').style.display = 'none';
+  document.getElementById('score-live-wrap').style.display = 'block';
+  soUpdateUI();
+  showToast('⚡ Super Over started!');
+}
+
+function soCurrentInn() {
+  return soState.currentSoInnings === 1 ? soState.soInn1 : soState.soInn2;
+}
+
+function soUpdateUI() {
+  if (!soState) return;
+  const inn = soCurrentInn();
+  const ov = ovStr(inn.balls);
+  const battingTeam = soState.currentSoInnings === 1 ? soState.batFirst : soState.bowlFirst;
+  const target = soState.currentSoInnings === 2 ? (soState.soInn1.runs + 1) : null;
+
+  document.getElementById('lv-score').textContent = `${inn.runs}/${inn.wickets}`;
+  document.getElementById('lv-overs').textContent = `${ov} overs`;
+  document.getElementById('lv-teams-text').textContent = `⚡ SUPER OVER ${soState.number > 1 ? '#'+soState.number : ''} — ${match.team1} vs ${match.team2}`;
+  document.getElementById('lv-t1-logo').innerHTML = getTeamLogo(match.team1, 22);
+  document.getElementById('lv-t2-logo').innerHTML = getTeamLogo(match.team2, 22);
+  document.getElementById('lv-venue').textContent = '⚡ Super Over — Max 2 Wickets';
+  document.getElementById('lv-batting-badge').textContent = `${battingTeam} BATTING`;
+  document.getElementById('lv-toss-info').textContent = '';
+  document.getElementById('lv-target').textContent = target ? `Need ${target - inn.runs} from ${6 - inn.balls} balls` : '';
+
+  const b1 = inn.batters[soState.soStriker] || {runs:0,balls:0,fours:0,sixes:0};
+  const b2 = inn.batters[soState.soNonStriker] || {runs:0,balls:0,fours:0,sixes:0};
+  document.getElementById('b1n').textContent = soState.soStriker;
+  document.getElementById('b1s').textContent = `${b1.runs} (${b1.balls})`;
+  document.getElementById('b1d').textContent = `4s:${b1.fours||0} 6s:${b1.sixes||0}`;
+  document.getElementById('b2n').textContent = soState.soNonStriker;
+  document.getElementById('b2s').textContent = `${b2.runs} (${b2.balls})`;
+  document.getElementById('b2d').textContent = `4s:${b2.fours||0} 6s:${b2.sixes||0}`;
+  document.getElementById('bc1').className = 'batter-box striker';
+  document.getElementById('bc2').className = 'batter-box';
+
+  const bwl = inn.bowlers[soState.soBowler] || {wickets:0,runs:0,balls:0};
+  document.getElementById('bowl-name').textContent = soState.soBowler;
+  document.getElementById('bowl-fig').textContent = `${bwl.wickets}-${bwl.runs} (0.${bwl.balls%6})`;
+
+  document.getElementById('over-chips').innerHTML = inn.currentOver.map(b =>
+    `<span class="ball-chip bc-${b.startsWith('Wd')?'Wd':b.startsWith('Nb')?'Nb':b.startsWith('Lb')?'Lb':b.startsWith('B')?'B':b}">${b}</span>`
+  ).join('');
+  document.getElementById('over-log').textContent = `Balls left: ${6 - inn.balls}`;
+
+  // Show/hide end innings btn
+  const endBtn = document.getElementById('end-inn-btn');
+  if (endBtn) endBtn.style.display = 'none'; // SO handles its own end
+
+  document.getElementById('btn-return-hurt').style.display = 'none';
+  document.getElementById('freehit-bar').classList.toggle('show', soState.soIsFreeHit);
+
+  // Result area: super over badge
+  document.getElementById('result-area').innerHTML = `<div style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,#331100,#663300);border:1px solid #ff9900;border-radius:20px;padding:4px 12px;font-size:0.78rem;font-family:'Bebas Neue',sans-serif;color:#ff9900;letter-spacing:1px">⚡ SUPER OVER${soState.number>1?' #'+soState.number:''}</div>`;
+
+  sbSave(match);
+}
+
+function soProcessDelivery(extType, runs, dismissType, fielder, runsSrc) {
+  if (!soState) return;
+  const inn = soCurrentInn();
+  const bwl = inn.bowlers[soState.soBowler];
+  const str = inn.batters[soState.soStriker];
+  let legal = true, chip = '', comm = '';
+  if (!inn.extrasBreakdown) inn.extrasBreakdown = {wides:0,noballs:0,legbyes:0,byes:0};
+
+  const preSnap = JSON.parse(JSON.stringify({soStriker:soState.soStriker,soNonStriker:soState.soNonStriker,soIsFreeHit:soState.soIsFreeHit,inn:JSON.parse(JSON.stringify(inn))}));
+
+  if (extType === 'Wd') {
+    const tot = 1+(runs||0); inn.runs+=tot; inn.extras+=tot; bwl.runs+=tot; inn.extrasBreakdown.wides+=tot;
+    legal = false; chip = runs>0?`Wd+${runs}`:'Wd'; comm = `Wide${runs>0?` +${runs}`:''}. +${tot}.`; soState.soIsFreeHit=false;
+    if (runs>0&&runs%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  } else if (extType === 'Nb') {
+    const tot = 1+(runs||0); inn.runs+=tot; inn.extras+=tot; bwl.runs+=tot; inn.extrasBreakdown.noballs+=tot;
+    str.balls++;
+    if (runs>0&&runsSrc==='bat'){str.runs+=runs;if(runs===4)str.fours++;if(runs===6)str.sixes++;}
+    legal = false; chip = runs>0?`Nb+${runs}`:'Nb'; comm = `No Ball${runs>0?` +${runs}`:''}. +${tot}.`; soState.soIsFreeHit=true;
+    if (runs>0&&runs%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  } else if (extType === 'Lb') {
+    inn.runs+=runs; inn.extras+=runs; inn.extrasBreakdown.legbyes+=runs;
+    bwl.balls++; str.balls++; inn.balls++;
+    legal=true; chip=`Lb${runs}`; comm=`Leg bye. ${runs} run${runs!==1?'s':''}.`; soState.soIsFreeHit=false;
+    if (runs%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  } else if (extType === 'B') {
+    inn.runs+=runs; inn.extras+=runs; inn.extrasBreakdown.byes+=runs;
+    bwl.balls++; str.balls++; inn.balls++;
+    legal=true; chip=`B${runs}`; comm=`Bye. ${runs} run${runs!==1?'s':''}.`; soState.soIsFreeHit=false;
+    if (runs%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  } else if (dismissType) {
+    const isNb=extType==='Nb',isWd=extType==='Wd';
+    const wktCntsBowler = !isNb && !['Run Out','Obstructing'].includes(dismissType);
+    if (isNb){inn.runs+=1;inn.extras+=1;bwl.runs+=1;str.balls++;legal=false;}
+    if (isWd){inn.runs+=1;inn.extras+=1;bwl.runs+=1;legal=false;}
+    if (runs>0&&!isWd){str.runs+=runs;str.balls++;if(!isNb)bwl.runs+=runs;if(runs===4)str.fours++;if(runs===6)str.sixes++;}
+    inn.wickets++;
+    if (!isNb){inn.balls++;bwl.balls++;}else{inn.balls++;bwl.balls++;}
+    if (wktCntsBowler) bwl.wickets++;
+    str.out=true; str.dismissal=fmtDismiss(dismissType,soState.soBowler,fielder);
+    chip='W'; inn.fow.push({n:inn.wickets,score:inn.runs,ov:ovStr(inn.balls),batter:soState.soStriker,dis:str.dismissal});
+    comm=`WICKET! ${soState.soStriker} ${str.dismissal}. ${inn.runs}/${inn.wickets}`;
+    soState.soIsFreeHit=false;
+    if (runs>0&&runs%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  } else {
+    const val=runs;
+    inn.runs+=val;str.runs+=val;str.balls++;bwl.runs+=val;bwl.balls++;inn.balls++;
+    if(val===0){bwl.dots=(bwl.dots||0)+1;comm=`Dot ball.`;}
+    else if(val===4){str.fours++;comm=`FOUR! ${soState.soStriker} hits a boundary!`;}
+    else if(val===6){str.sixes++;comm=`SIX! ${soState.soStriker} goes huge!`;}
+    else{comm=`${val} run${val>1?'s':''}.`;}
+    chip=val.toString(); soState.soIsFreeHit=false;
+    if(val%2===1){let t=soState.soStriker;soState.soStriker=soState.soNonStriker;soState.soNonStriker=t;}
+  }
+
+  inn.currentOver.push(chip);
+  soState.soCommentary.unshift({ov:ovStr(inn.balls),chip,text:comm});
+  soState.soBallLog.push({chip,snap:preSnap});
+  document.getElementById('freehit-bar').classList.toggle('show', soState.soIsFreeHit);
+
+  // Check: 2 wickets lost = innings ends
+  if (inn.wickets >= 2) {
+    soEndInnings(); return;
+  }
+
+  // Wicket: bring in reserve batter (only 1 reserve allowed)
+  if (dismissType && inn.wickets < 2) {
+    const res = soState.soReserve;
+    if (res && !inn.batters[res]?.out) {
+      soState.soStriker = res;
+      if (!inn.batters[res]) inn.batters[res]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:''};
+      showToast(`🚨 ${res} comes in as reserve batter`);
+    }
+  }
+
+  // Check: 6 legal balls
+  if (legal && inn.balls >= 6) {
+    soEndInnings(); return;
+  }
+
+  soUpdateUI();
+}
+
+function soEndInnings() {
+  if (!soState) return;
+  const inn = soCurrentInn();
+  if (soState.currentSoInnings === 1) {
+    soState.soInn1 = inn;
+    // Setup innings 2
+    const battingTeam2 = soState.bowlFirst;
+    const bowlingTeam2 = soState.batFirst;
+    const target = soState.soInn1.runs;
+    document.getElementById('so-next-summary').innerHTML =
+      `<div style="font-family:'Bebas Neue',sans-serif;font-size:1.1rem;color:var(--gold)">${soState.batFirst}: ${soState.soInn1.runs}/${soState.soInn1.wickets}</div>
+       <div style="font-size:0.82rem;color:var(--muted);margin-top:4px">${battingTeam2} needs <b>${target+1}</b> to win</div>`;
+    ['so2-bat1-inp','so2-bat2-inp','so2-bat3-inp','so2-bowl-inp'].forEach(id=>document.getElementById(id).value='');
+    openModal('modal-so-next');
+  } else {
+    soState.soInn2 = inn;
+    soDecideResult();
+  }
+}
+
+function startSuperOverInnings2() {
+  const b1 = document.getElementById('so2-bat1-inp').value.trim();
+  const b2 = document.getElementById('so2-bat2-inp').value.trim();
+  const b3 = document.getElementById('so2-bat3-inp').value.trim();
+  const bwl = document.getElementById('so2-bowl-inp').value.trim();
+  if (!b1||!b2||!b3) return alert('Enter all 3 batters');
+  if (!bwl) return alert('Enter bowler name');
+  if (b1===b2||b1===b3||b2===b3) return alert('Batters must be different players');
+
+  soState.currentSoInnings = 2;
+  soState.soInn2 = newSoInn();
+  soState.soStriker = b1; soState.soNonStriker = b2; soState.soReserve = b3; soState.soBowler = bwl;
+  soState.soIsFreeHit = false;
+  soState.soInn2.batters[b1]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:''};
+  soState.soInn2.batters[b2]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:''};
+  soState.soInn2.batters[b3]={runs:0,balls:0,fours:0,sixes:0,out:false,dismissal:'',waiting:true};
+  soState.soInn2.bowlers[bwl]={runs:0,wickets:0,balls:0,dots:0};
+  closeModal('modal-so-next');
+  soUpdateUI();
+  showToast('⚡ Super Over Innings 2 started!');
+}
+
+function soDecideResult() {
+  if (!soState||!soState.soInn1||!soState.soInn2) return;
+  const inn1 = soState.soInn1, inn2 = soState.soInn2;
+  const team1 = soState.batFirst, team2 = soState.bowlFirst;
+  let winner = null, resultTxt = '';
+
+  if (inn2.runs > inn1.runs) {
+    winner = team2;
+    resultTxt = `${team2} WON THE SUPER OVER`;
+  } else if (inn1.runs > inn2.runs) {
+    winner = team1;
+    resultTxt = `${team1} WON THE SUPER OVER`;
+  } else {
+    // Tied super over — another round
+    resultTxt = 'SUPER OVER TIED';
+    winner = null;
+  }
+
+  // Save this super over
+  if (!match.superOvers) match.superOvers = [];
+  match.superOvers.push({
+    number: soState.number,
+    batFirst: soState.batFirst,
+    bowlFirst: soState.bowlFirst,
+    inn1: inn1,
+    inn2: inn2,
+    winner,
+    commentary: soState.soCommentary
+  });
+
+  if (winner) {
+    // Final result
+    const finalTxt = `${match.result?.text || 'MATCH TIED'} — ${winner} WON AFTER SUPER OVER`;
+    match.result.text = finalTxt;
+    match.result.winner = winner;
+    match.result.superOverWinner = winner;
+    match.result.tied = false;
+
+    // Update saved match
+    const idx = matches.findIndex(m => m.id === match.id);
+    if (idx !== -1) { matches[idx] = JSON.parse(JSON.stringify(match)); save('kgh-matches', matches); }
+    else { matches.push(JSON.parse(JSON.stringify(match))); save('kgh-matches', matches); }
+    sbSave(match);
+
+    soState = null;
+    document.getElementById('result-area').innerHTML = '';
+    document.getElementById('match-over-result').textContent = finalTxt;
+    document.getElementById('btn-start-super-over').style.display = 'none';
+    openModal('modal-match-over');
+    showToast('⚡ ' + winner + ' wins the Super Over!');
+  } else {
+    // Another Super Over
+    const soNum = soState.number;
+    soState = null;
+    showToast('⚡ Super Over tied! Another Super Over!');
+    setTimeout(() => {
+      match.result.text = `MATCH TIED — SUPER OVER ${soNum} TIED`;
+      match.result.tied = true;
+      openSuperOverSetup();
+    }, 800);
+  }
+}
+
+// ═══ Wire SO scoring into existing buttons ═══
+function isSuperOver() { return !!soState; }
+
+function soAddBall(val) {
+  if (!soState) return;
+  soProcessDelivery(null, val, null, null, 'bat');
+}
+
+function soAddExtra(runs) {
+  if (!soState || !selExtType_) return;
+  const t = selExtType_; clearExtUI();
+  soProcessDelivery(t, runs, null, null, 'bat');
+}
+
+function soShowWicket() {
+  if (!soState) return;
+  showWicketModal(); // reuse existing wicket modal
+}
+
+function soUndoBall() {
+  if (!soState || !soState.soBallLog?.length) { showToast('Nothing to undo!'); return; }
+  const last = soState.soBallLog.pop();
+  const s = last.snap;
+  soState.soStriker = s.soStriker;
+  soState.soNonStriker = s.soNonStriker;
+  soState.soIsFreeHit = s.soIsFreeHit;
+  if (soState.currentSoInnings === 1) soState.soInn1 = s.inn;
+  else soState.soInn2 = s.inn;
+  soState.soCommentary.shift();
+  document.getElementById('freehit-bar').classList.toggle('show', soState.soIsFreeHit);
+  soUpdateUI();
+  showToast('↩ Undone');
 }
 
 function renderScorecard(){
@@ -2254,6 +2676,47 @@ function exportPDF(){
   html+=`<h1>🏏 KGH Scorer — Match Scorecard</h1><p style="font-size:12px;color:#555">${m.team1} vs ${m.team2} • ${m.venue}</p>`;
   if(m.toss?.winner)html+=`<p style="font-size:11px;color:#777">🪙 ${m.toss.winner} won toss & elected to ${m.toss.elected}</p>`;
   if(m.result)html+=`<div class="result">🏆 ${m.result.text||''}${m.result.potm?`<br><span style="font-size:12px;color:#aa7700">🌟 POTM: ${m.result.potm}</span>`:''}</div>`;
+
+  // Super Over section in scorecard
+  if(m.superOvers&&m.superOvers.length){
+    m.superOvers.forEach(so=>{
+      const so1=so.inn1,so2=so.inn2;
+      html+=`<div style="margin-top:1.2rem;border:2px solid #ff9900;border-radius:14px;overflow:hidden">
+        <div style="background:linear-gradient(135deg,#331100,#663300);padding:0.6rem 1rem;font-family:'Bebas Neue',sans-serif;font-size:1rem;color:#ff9900;letter-spacing:2px">⚡ SUPER OVER${so.number>1?' #'+so.number:''}</div>`;
+      // Inn1
+      if(so1){
+        const b1Rows=Object.entries(so1.batters||{}).filter(([n,s])=>!s.waiting).map(([n,s])=>
+          `<tr><td style="cursor:pointer" onclick="showPlayerProfile('${n.replace(/'/g,"\'")}')"><div style="font-weight:700;color:var(--blue)">${n}${!s.out?'*':''}</div><div class="sc-dismiss" style="font-size:0.7rem">${s.out?s.dismissal:'not out'}</div></td><td>${s.runs}</td><td>${s.balls}</td><td>${s.fours||0}</td><td>${s.sixes||0}</td></tr>`
+        ).join('');
+        const bwl1=Object.entries(so1.bowlers||{}).map(([n,s])=>
+          `<tr><td style="cursor:pointer" onclick="showPlayerProfile('${n.replace(/'/g,"\'")}')"><div style="font-weight:700;color:var(--blue)">${n}</div></td><td>${s.wickets}</td><td>${so1.balls%6===0&&so1.balls>0?Math.floor(so1.balls/6):ovStr(so1.balls)}</td><td>${s.runs}</td></tr>`
+        ).join('');
+        html+=`<div style="padding:0.7rem;border-bottom:1px solid #663300">
+          <div style="font-size:0.75rem;font-family:'Bebas Neue',sans-serif;color:var(--muted);margin-bottom:4px">${so.batFirst} BATTING</div>
+          <div style="font-size:1.3rem;font-family:'Bebas Neue',sans-serif;color:var(--gold)">${so1.runs}/${so1.wickets} <span style="font-size:0.85rem;color:var(--muted)">(${ovStr(so1.balls)})</span></div>
+          <table class="sc-table" style="margin-top:0.4rem"><thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>${b1Rows}</tbody></table>
+          <table class="sc-table" style="margin-top:0.4rem"><thead><tr><th>Bowler</th><th>W</th><th>Ov</th><th>R</th></tr></thead><tbody>${bwl1}</tbody></table>
+        </div>`;
+      }
+      // Inn2
+      if(so2){
+        const b2Rows=Object.entries(so2.batters||{}).filter(([n,s])=>!s.waiting).map(([n,s])=>
+          `<tr><td style="cursor:pointer" onclick="showPlayerProfile('${n.replace(/'/g,"\'")}')"><div style="font-weight:700;color:var(--blue)">${n}${!s.out?'*':''}</div><div class="sc-dismiss" style="font-size:0.7rem">${s.out?s.dismissal:'not out'}</div></td><td>${s.runs}</td><td>${s.balls}</td><td>${s.fours||0}</td><td>${s.sixes||0}</td></tr>`
+        ).join('');
+        const bwl2=Object.entries(so2.bowlers||{}).map(([n,s])=>
+          `<tr><td style="cursor:pointer" onclick="showPlayerProfile('${n.replace(/'/g,"\'")}')"><div style="font-weight:700;color:var(--blue)">${n}</div></td><td>${s.wickets}</td><td>${ovStr(so2.balls)}</td><td>${s.runs}</td></tr>`
+        ).join('');
+        html+=`<div style="padding:0.7rem">
+          <div style="font-size:0.75rem;font-family:'Bebas Neue',sans-serif;color:var(--muted);margin-bottom:4px">${so.bowlFirst} BATTING</div>
+          <div style="font-size:1.3rem;font-family:'Bebas Neue',sans-serif;color:var(--gold)">${so2.runs}/${so2.wickets} <span style="font-size:0.85rem;color:var(--muted)">(${ovStr(so2.balls)})</span></div>
+          <table class="sc-table" style="margin-top:0.4rem"><thead><tr><th>Batter</th><th>R</th><th>B</th><th>4s</th><th>6s</th></tr></thead><tbody>${b2Rows}</tbody></table>
+          <table class="sc-table" style="margin-top:0.4rem"><thead><tr><th>Bowler</th><th>W</th><th>Ov</th><th>R</th></tr></thead><tbody>${bwl2}</tbody></table>
+        </div>`;
+      }
+      html+=`<div style="text-align:center;padding:0.5rem;background:#1a0800;font-family:'Bebas Neue',sans-serif;color:${so.winner?'#ff9900':'var(--muted)'}">⚡ ${so.winner?so.winner+' WIN SUPER OVER':'TIED'}</div>`;
+      html+=`</div>`;
+    });
+  }
   [m.inning1,m.inning2].filter(Boolean).forEach((inn,idx)=>{
     const team=idx===0?m.team1:m.team2;const xb=inn.extrasBreakdown;
     html+=`<h2>${team}: ${inn.runs}/${inn.wickets} (${ovStr(inn.balls)} ov)</h2>`;
